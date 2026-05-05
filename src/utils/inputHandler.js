@@ -234,23 +234,29 @@ export class InputHandler {
 
     // 显示指令选择器
     const commandList = getCommandList()
-    const selectedItem = await showCommandSelector(commandList)
+    const result = await showCommandSelector(commandList)
 
     // 恢复输入
     this.isShowingSelector = false
     this.selectorType = null
 
-    if (selectedItem) {
-      // 用户选择了指令，直接执行（不填入输入框）
-      this.cleanup()
-      if (this.resolveInput) {
-        this.resolveInput(selectedItem.name)
-        this.resolveInput = null
+    if (result) {
+      if (result.method === 'enter') {
+        // Enter 键：直接执行指令
+        this.cleanup()
+        if (this.resolveInput) {
+          this.resolveInput(result.item.name)
+          this.resolveInput = null
+        }
+        return
+      } else {
+        // Tab 键：填入输入框，让用户继续编辑
+        this.inputBuffer = result.item.name + ' '
+        this.cursorPosition = this.inputBuffer.length
       }
-      return
     }
 
-    // 用户取消了选择，刷新显示并继续监听
+    // 刷新显示并继续监听
     this.refreshDisplay()
     process.stdin.on('data', this.handleKeyPress)
   }
@@ -276,16 +282,26 @@ export class InputHandler {
 
     // 显示文件选择器
     const fileList = getProjectFileList()
-    const selectedItem = await showFileSelector(fileList)
+    const result = await showFileSelector(fileList)
 
     // 恢复输入
     this.isShowingSelector = false
     this.selectorType = null
 
-    if (selectedItem) {
-      // 用户选择了文件，填入输入框让用户继续输入问题
-      this.inputBuffer = `@${selectedItem.name} `
-      this.cursorPosition = this.inputBuffer.length
+    if (result) {
+      if (result.method === 'enter') {
+        // Enter 键：直接执行（发送文件内容给 AI）
+        this.cleanup()
+        if (this.resolveInput) {
+          this.resolveInput(`@${result.item.name}`)
+          this.resolveInput = null
+        }
+        return
+      } else {
+        // Tab 键：填入输入框，让用户继续编辑
+        this.inputBuffer = `@${result.item.name} `
+        this.cursorPosition = this.inputBuffer.length
+      }
     }
 
     // 刷新显示并继续监听

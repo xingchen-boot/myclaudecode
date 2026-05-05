@@ -148,22 +148,22 @@ export async function showSelector({ title, items }) {
         return
       }
 
-      // Tab 键 - 确认选择
+      // Tab 键 - 确认选择（用于填充输入框）
       if (key === '\t') {
         cleanup()
         if (filteredItems.length > 0) {
-          resolve(filteredItems[selectedIndex])
+          resolve({ item: filteredItems[selectedIndex], method: 'tab' })
         } else {
           resolve(null)
         }
         return
       }
 
-      // Enter 键 - 确认选择
+      // Enter 键 - 确认选择（用于直接执行）
       if (key === '\r' || key === '\n') {
         cleanup()
         if (filteredItems.length > 0) {
-          resolve(filteredItems[selectedIndex])
+          resolve({ item: filteredItems[selectedIndex], method: 'enter' })
         } else {
           resolve(null)
         }
