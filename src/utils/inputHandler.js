@@ -88,8 +88,8 @@ export class InputHandler {
         return
 
       default:
-        // 处理普通字符
-        if (key.length === 1 && key >= ' ') {
+        // 处理普通字符（支持输入法一次性输入多个字符）
+        if (key.length >= 1 && key >= ' ') {
           await this.handleCharInput(key)
         }
     }
@@ -97,7 +97,7 @@ export class InputHandler {
 
   /**
    * 处理字符输入
-   * @param {string} char - 输入的字符
+   * @param {string} char - 输入的字符（可能是多个字符，如输入法一次性输入）
    */
   async handleCharInput(char) {
     // 在光标位置插入字符
@@ -105,13 +105,14 @@ export class InputHandler {
       this.inputBuffer.slice(0, this.cursorPosition) +
       char +
       this.inputBuffer.slice(this.cursorPosition)
-    this.cursorPosition++
+    // 光标位置增加输入字符的长度（支持输入法一次性输入多个字符）
+    this.cursorPosition += char.length
 
     // 刷新显示
     this.refreshDisplay()
 
-    // 检查是否需要触发选择器
-    await this.checkAndTriggerSelector(char)
+    // 检查是否需要触发选择器（只检查最后一个字符）
+    await this.checkAndTriggerSelector(char[char.length - 1])
   }
 
   /**
@@ -232,7 +233,12 @@ export class InputHandler {
     // 刷新显示
     this.refreshDisplay()
 
-    // 重新监听键盘事件
+    // 重新启用原始模式并监听键盘事件
+    if (process.stdin.setRawMode) {
+      process.stdin.setRawMode(true)
+    }
+    process.stdin.resume()
+    process.stdin.setEncoding('utf8')
     process.stdin.on('data', this.handleKeyPress)
   }
 
@@ -274,7 +280,12 @@ export class InputHandler {
     // 刷新显示
     this.refreshDisplay()
 
-    // 重新监听键盘事件
+    // 重新启用原始模式并监听键盘事件
+    if (process.stdin.setRawMode) {
+      process.stdin.setRawMode(true)
+    }
+    process.stdin.resume()
+    process.stdin.setEncoding('utf8')
     process.stdin.on('data', this.handleKeyPress)
   }
 
