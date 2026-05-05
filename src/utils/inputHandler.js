@@ -208,15 +208,25 @@ export class InputHandler {
 
     // 显示指令选择器
     const commandList = getCommandList()
-    const selected = await this.showCommandSelector(commandList)
+    const result = await this.showCommandSelector(commandList)
 
     // 恢复输入
     this.isShowingSelector = false
 
-    if (selected) {
-      // 用户选择了指令，填入输入框
-      this.inputBuffer = selected + ' '
-      this.cursorPosition = this.inputBuffer.length
+    if (result) {
+      if (result.method === 'enter') {
+        // Enter 键：直接执行指令
+        this.cleanup()
+        if (this.resolveInput) {
+          this.resolveInput(result.name)
+          this.resolveInput = null
+        }
+        return
+      } else {
+        // Tab 键：填入输入框
+        this.inputBuffer = result.name + ' '
+        this.cursorPosition = this.inputBuffer.length
+      }
     }
 
     // 刷新显示
@@ -250,14 +260,14 @@ export class InputHandler {
       name: file.name,
       description: file.description || ''
     }))
-    const selected = await this.showFileSelector(items)
+    const result = await this.showFileSelector(items)
 
     // 恢复输入
     this.isShowingSelector = false
 
-    if (selected) {
-      // 用户选择了文件，填入输入框
-      this.inputBuffer = `@${selected} `
+    if (result) {
+      // 文件：无论 Tab 还是 Enter，都填入输入框
+      this.inputBuffer = `@${result.name} `
       this.cursorPosition = this.inputBuffer.length
     }
 
@@ -295,28 +305,29 @@ export class InputHandler {
   /**
    * 显示指令选择器
    * @param {Array} commandList - 指令列表
-   * @returns {Promise<string|null>} - 选中的指令或 null
+   * @returns {Promise<Object|null>} - 选中的指令 {name, method} 或 null
    */
   async showCommandSelector(commandList) {
-    return this.showSelector('可用指令', commandList)
+    return this.showSelector('可用指令', commandList, 'command')
   }
 
   /**
    * 显示文件选择器
    * @param {Array} fileList - 文件列表
-   * @returns {Promise<string|null>} - 选中的文件或 null
+   * @returns {Promise<Object|null>} - 选中的文件 {name, method} 或 null
    */
   async showFileSelector(fileList) {
-    return this.showSelector('项目文件', fileList)
+    return this.showSelector('项目文件', fileList, 'file')
   }
 
   /**
    * 显示选择列表
    * @param {string} title - 列表标题
    * @param {Array} items - 列表项 [{name, description}]
-   * @returns {Promise<string|null>} - 选中的名称或 null
+   * @param {string} type - 选择器类型 ('command' 或 'file')
+   * @returns {Promise<Object|null>} - 选中的项 {name, method} 或 null
    */
-  showSelector(title, items) {
+  showSelector(title, items, type) {
     return new Promise((resolve) => {
       // 当前选中索引
       let selectedIndex = 0
@@ -438,11 +449,28 @@ export class InputHandler {
           return
         }
 
-        // Tab 或 Enter - 确认选择
-        if (key === '\t' || key === '\r' || key === '\n') {
+        // Tab - 填充到输入框
+        if (key === '\t') {
           cleanup()
           if (filteredItems.length > 0) {
-            resolve(filteredItems[selectedIndex].name)
+            resolve({ name: filteredItems[selectedIndex].name, method: 'tab' })
+          } else {
+            resolve(null)
+          }
+          return
+        }
+
+        // Enter - 根据类型决定行为
+        if (key === '\r' || key === '\n') {
+          cleanup()
+          if (filteredItems.length > 0) {
+            if (type === 'command') {
+              // 指令：Enter 直接执行
+              resolve({ name: filteredItems[selectedIndex].name, method: 'enter' })
+            } else {
+              // 文件：Enter 填充到输入框
+              resolve({ name: filteredItems[selectedIndex].name, method: 'tab' })
+            }
           } else {
             resolve(null)
           }
