@@ -10,10 +10,13 @@ import { welcomeLog } from "./utils/init.js"
 import { writeHistoryToFrontFile } from "./utils/fsHandle.js"
 import { createInputHandler } from "./utils/inputHandler.js"
 import { parseInput, processFileReferences } from "./utils/commandParser.js"
-import { executeCommand } from "./commands/index.js"
+import { executeCommand, loadCustomCommands } from "./commands/index.js"
 
 // 创建 OpenAI 客户端实例
 const openai = createOpenAIClient()
+
+// 加载自定义指令
+loadCustomCommands()
 
 // 创建输入处理器
 const inputHandler = createInputHandler()
@@ -55,14 +58,47 @@ async function promptUser() {
 
     // 如果是指令，执行指令
     if (parsed.isCommand) {
-      const shouldContinue = await executeCommand(parsed.command, parsed.args, {
+      const commandResult = await executeCommand(parsed.command, parsed.args, {
         messages,
         clearMessages
       })
 
       // 如果指令返回 false，退出程序
-      if (!shouldContinue) {
+      if (!commandResult.shouldContinue) {
         process.exit(0)
+      }
+
+      // 如果是阻断类指令，直接继续下一轮对话
+      if (commandResult.type === 'blocking') {
+        promptUser()
+        return
+      }
+
+      // 如果是非阻断类指令，将指令结果和用户输入一起发送给大模型
+      if (commandResult.type === 'non-blocking' && commandResult.result) {
+        // 将指令结果添加到用户输入中
+        const inputWithCommandResult = `${parsed.args || ''}\n\n指令执行结果：\n${commandResult.result}`
+        messages.push({ role: 'user', content: inputWithCommandResult })
+
+        // 显示加载提示
+        const spinner = ora('AI 正在思考...').start()
+
+        // 获取 AI 回复
+        const aiResponse = await getAIResponse({
+          openai,
+          messages
+        })
+
+        // 添加 AI 回复到历史
+        messages.push(aiResponse)
+
+        // 停止加载提示并显示回复
+        spinner.stop()
+        logger.log('AI: ', "green")
+        logger.logMarkdown(aiResponse.content)
+
+        // 每轮对话结束后保存历史记录
+        writeHistoryToFrontFile(messages)
       }
 
       // 继续下一轮对话

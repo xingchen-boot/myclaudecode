@@ -1,5 +1,12 @@
 /**
  * 指令定义模块 - 定义所有可用指令及其处理函数
+ * 指令类型：
+ *   - blocking（阻断类）：执行后不给大模型发送请求，直接返回
+ *   - non-blocking（非阻断类）：执行后返回字符串，和用户输入一起发送给大模型
+ * 自定义指令：
+ *   - 从用户目录 ~/.front/commands/ 和项目目录 .front/commands/ 加载
+ *   - 每个子文件夹是一个指令，文件夹内的md文件是指令内容
+ *   - 例如：.front/commands/comms/a/c.md → 指令 /a:c
  */
 import chalk from 'chalk'
 import fs from 'fs'
@@ -8,43 +15,168 @@ import { getUserHomeDir, getCurrentWorkDir } from '../utils/pathUtils.js'
 
 /**
  * 指令列表
- * 每个指令包含：name（名称）、description（描述）、handler（处理函数）
+ * 每个指令包含：name（名称）、description（描述）、handler（处理函数）、type（类型）
+ * type: 'blocking' 表示阻断类，'non-blocking' 表示非阻断类
  */
 export const commands = {
   '/help': {
     name: '/help',
     description: '显示帮助信息',
-    handler: showHelp
+    handler: showHelp,
+    type: 'blocking'
   },
   '/clear': {
     name: '/clear',
     description: '清空对话历史',
-    handler: clearHistory
+    handler: clearHistory,
+    type: 'blocking'
   },
   '/history': {
     name: '/history',
     description: '查看对话历史',
-    handler: showHistory
+    handler: showHistory,
+    type: 'blocking'
   },
   '/exit': {
     name: '/exit',
     description: '退出程序',
-    handler: exitProgram
+    handler: exitProgram,
+    type: 'blocking'
   },
   '/quit': {
     name: '/quit',
     description: '退出程序',
-    handler: exitProgram
+    handler: exitProgram,
+    type: 'blocking'
   },
   '/model': {
     name: '/model',
     description: '查看当前模型',
-    handler: showModel
+    handler: showModel,
+    type: 'blocking'
   },
   '/config': {
     name: '/config',
     description: '查看配置信息',
-    handler: showConfig
+    handler: showConfig,
+    type: 'blocking'
+  }
+}
+
+/**
+ * 加载自定义指令
+ * 从用户目录 ~/.front/commands/ 和项目目录 .front/commands/ 加载
+ * 每个子文件夹是一个指令，文件夹内的md文件是指令内容
+ */
+export function loadCustomCommands() {
+  const userHome = getUserHomeDir()
+  const currentDir = getCurrentWorkDir()
+
+  // 自定义指令目录列表（项目目录优先级高于用户目录）
+  const commandDirs = [
+    path.join(currentDir, '.front', 'commands'),
+    path.join(userHome, '.front', 'commands')
+  ]
+
+  const addedCommands = new Set()
+
+  for (const commandsDir of commandDirs) {
+    if (!fs.existsSync(commandsDir)) {
+      continue
+    }
+
+    try {
+      // 读取commands目录下的所有子文件夹
+      const items = fs.readdirSync(commandsDir, { withFileTypes: true })
+
+      for (const item of items) {
+        if (!item.isDirectory()) {
+          continue
+        }
+
+        // 子文件夹名称作为指令分组
+        const groupName = item.name
+        const groupPath = path.join(commandsDir, groupName)
+
+        // 递归扫描文件夹内的md文件
+        const mdFiles = findMarkdownFiles(groupPath)
+
+        for (const mdFile of mdFiles) {
+          // 计算相对路径，用于生成指令名称
+          const relativePath = path.relative(groupPath, mdFile)
+          // 去掉.md扩展名，将路径分隔符替换为冒号
+          const commandName = relativePath.replace(/\.md$/i, '').replace(/[\\\/]/g, ':')
+          // 生成指令名称：/groupName:commandName
+          const fullCommandName = `/${groupName}:${commandName}`
+
+          // 避免重复添加
+          if (addedCommands.has(fullCommandName)) {
+            continue
+          }
+
+          // 创建自定义指令
+          commands[fullCommandName] = {
+            name: fullCommandName,
+            description: `自定义指令 - ${groupName}:${commandName}`,
+            handler: createCustomCommandHandler(mdFile),
+            type: 'non-blocking'
+          }
+
+          addedCommands.add(fullCommandName)
+        }
+      }
+    } catch (error) {
+      console.error(chalk.yellow(`加载自定义指令目录失败: ${commandsDir}`))
+      console.error(chalk.dim(error.message))
+    }
+  }
+}
+
+/**
+ * 递归查找目录下的所有markdown文件
+ * @param {string} dir - 目录路径
+ * @returns {Array<string>} - markdown文件路径列表
+ */
+function findMarkdownFiles(dir) {
+  const results = []
+
+  try {
+    const items = fs.readdirSync(dir, { withFileTypes: true })
+
+    for (const item of items) {
+      const fullPath = path.join(dir, item.name)
+
+      if (item.isDirectory()) {
+        // 递归扫描子目录
+        results.push(...findMarkdownFiles(fullPath))
+      } else if (item.isFile() && /\.md$/i.test(item.name)) {
+        // 添加md文件
+        results.push(fullPath)
+      }
+    }
+  } catch (error) {
+    console.error(chalk.dim(`扫描目录失败: ${dir}`))
+  }
+
+  return results
+}
+
+/**
+ * 创建自定义指令处理函数
+ * @param {string} mdFilePath - markdown文件路径
+ * @returns {Function} - 指令处理函数
+ */
+function createCustomCommandHandler(mdFilePath) {
+  return function (args) {
+    try {
+      // 读取md文件内容
+      const content = fs.readFileSync(mdFilePath, 'utf-8')
+      return content
+    } catch (error) {
+      console.error(chalk.red(`读取自定义指令文件失败: ${mdFilePath}`))
+      console.error(chalk.dim(error.message))
+      return `错误：无法读取指令文件 ${mdFilePath}`
+    }
   }
 }
 
@@ -78,7 +210,10 @@ export function getCommandList() {
  * @param {Object} context - 执行上下文
  * @param {Array} context.messages - 对话历史
  * @param {Function} context.clearMessages - 清空对话历史的函数
- * @returns {Promise<boolean>} - 是否继续对话
+ * @returns {Promise<Object>} - 执行结果
+ *   - shouldContinue: 是否继续对话（false 表示退出程序）
+ *   - type: 指令类型（'blocking' 或 'non-blocking'）
+ *   - result: 指令执行结果（非阻断类指令返回的字符串）
  */
 export async function executeCommand(command, args, context = {}) {
   const cmd = commands[command]
@@ -86,14 +221,19 @@ export async function executeCommand(command, args, context = {}) {
   if (!cmd) {
     console.log(chalk.red(`未知指令: ${command}`))
     console.log(chalk.yellow('输入 /help 查看可用指令'))
-    return true
+    return { shouldContinue: true, type: 'blocking', result: null }
   }
 
   try {
-    return await cmd.handler(args, context)
+    const result = await cmd.handler(args, context)
+    return {
+      shouldContinue: result !== false,
+      type: cmd.type || 'blocking',
+      result: cmd.type === 'non-blocking' ? result : null
+    }
   } catch (error) {
     console.log(chalk.red(`执行指令失败: ${error.message}`))
-    return true
+    return { shouldContinue: true, type: 'blocking', result: null }
   }
 }
 
