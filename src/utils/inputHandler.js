@@ -17,8 +17,8 @@ export class InputHandler {
     this.rl = null
     // 是否正在显示选择器
     this.isShowingSelector = false
-    // 上一次输入的内容
-    this.lastInput = ''
+    // 是否是 TTY 环境
+    this.isTTY = process.stdin.isTTY === true
   }
 
   /**
@@ -29,54 +29,29 @@ export class InputHandler {
     return new Promise((resolve) => {
       this.resolveInput = resolve
       this.isShowingSelector = false
-      this.lastInput = ''
 
       // 创建 readline 接口
       this.rl = readline.createInterface({
         input: process.stdin,
-        output: process.stdout,
-        completer: (line) => this.completer(line)
+        output: process.stdout
       })
 
       // 监听行输入
       this.rl.on('line', async (line) => {
         const trimmedLine = line.trim()
 
-        // 普通输入，直接返回
-        this.rl.close()
-        resolve(trimmedLine)
-      })
-
-      // 监听关闭事件
-      this.rl.on('close', () => {
-        if (this.resolveInput) {
-          this.resolveInput('exit')
-          this.resolveInput = null
-        }
-      })
-
-      // 监听按键事件，检测 / 和 @
-      this.rl.on('keypress', async (char, key) => {
-        // 如果正在显示选择器，不处理
-        if (this.isShowingSelector) {
-          return
-        }
-
-        // 获取当前行内容
-        const line = this.rl.line || ''
-
-        // 检测是否输入了 / 或 @
-        if (line === '/' || line === '@') {
+        // 检查是否需要触发选择器
+        if (trimmedLine === '/' || trimmedLine === '@') {
           // 暂停 readline
           this.rl.pause()
           this.isShowingSelector = true
 
           let selected = null
 
-          if (line === '/') {
+          if (trimmedLine === '/') {
             // 显示指令选择器
             selected = await this.showCommandSelector()
-          } else if (line === '@') {
+          } else if (trimmedLine === '@') {
             // 显示文件选择器
             selected = await this.showFileSelector()
           }
@@ -91,7 +66,91 @@ export class InputHandler {
             readline.cursorTo(process.stdout, 0)
             // 重新显示提示符和选择的内容
             process.stdout.write('问：')
-            if (line === '/') {
+            if (trimmedLine === '/') {
+              this.rl.write(selected + ' ')
+            } else {
+              this.rl.write(`@${selected} `)
+            }
+            // 继续等待用户输入
+            return
+          } else {
+            // 用户取消了选择，恢复 readline
+            this.rl.resume()
+            this.rl.prompt()
+            return
+          }
+        }
+
+        // 普通输入，直接返回
+        this.rl.close()
+        resolve(trimmedLine)
+      })
+
+      // 监听关闭事件
+      this.rl.on('close', () => {
+        if (this.resolveInput) {
+          this.resolveInput('exit')
+          this.resolveInput = null
+        }
+      })
+
+      // 显示提示符
+      this.rl.prompt()
+    })
+  }
+
+  /**
+   * 设置 TTY 环境下的输入监听
+   */
+  setupTTYInput() {
+    // 启用原始模式以监听按键
+    if (process.stdin.setRawMode) {
+      process.stdin.setRawMode(true)
+    }
+    process.stdin.resume()
+    process.stdin.setEncoding('utf8')
+
+    // 监听按键事件
+    process.stdin.on('data', async (data) => {
+      // 如果正在显示选择器，不处理
+      if (this.isShowingSelector) {
+        return
+      }
+
+      const key = data.toString()
+
+      // 检测是否输入了 / 或 @
+      if (key === '/' || key === '@') {
+        // 获取当前行内容
+        const currentLine = this.rl.line || ''
+
+        // 如果当前行只有 / 或 @，触发选择器
+        if (currentLine === key) {
+          // 暂停 readline
+          this.rl.pause()
+          this.isShowingSelector = true
+
+          let selected = null
+
+          if (key === '/') {
+            // 显示指令选择器
+            selected = await this.showCommandSelector()
+          } else if (key === '@') {
+            // 显示文件选择器
+            selected = await this.showFileSelector()
+          }
+
+          this.isShowingSelector = false
+
+          if (selected) {
+            // 用户选择了项目，清空当前行并写入选择的内容
+            this.rl.resume()
+            // 清空当前行
+            readline.clearLine(process.stdout, 0)
+            readline.cursorTo(process.stdout, 0)
+            // 重新显示提示符和选择的内容
+            process.stdout.write('问：')
+            if (key === '/') {
               this.rl.write(selected + ' ')
             } else {
               this.rl.write(`@${selected} `)
@@ -99,12 +158,10 @@ export class InputHandler {
           } else {
             // 用户取消了选择，恢复 readline
             this.rl.resume()
+            this.rl.prompt()
           }
         }
-      })
-
-      // 显示提示符
-      this.rl.prompt()
+      }
     })
   }
 
@@ -408,6 +465,11 @@ export class InputHandler {
       this.rl.close()
       this.rl = null
     }
+    // 恢复 stdin
+    if (process.stdin.setRawMode) {
+      process.stdin.setRawMode(false)
+    }
+    process.stdin.pause()
   }
 }
 
