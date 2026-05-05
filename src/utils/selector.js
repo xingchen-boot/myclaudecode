@@ -202,7 +202,7 @@ export async function showSelector({ title, items }) {
       if (process.stdin.setRawMode) {
         process.stdin.setRawMode(false)
       }
-      process.stdin.pause()
+      // 不暂停 stdin，让 inputHandler 继续监听
     }
 
     // 启用原始模式以监听键盘事件
