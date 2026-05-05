@@ -1,10 +1,9 @@
 /**
- * 输入处理器 - 实现实时键盘监听和选择器触发
- * 支持按下 / 或 @ 立即显示选择列表
+ * 输入处理器 - 使用 readline completer 实现指令和文件选择
+ * 支持输入法，兼容各种终端环境
  */
 import readline from 'readline'
 import chalk from 'chalk'
-import { showCommandSelector, showFileSelector } from './selector.js'
 import { getCommandList } from '../commands/index.js'
 import { getProjectFileList } from './commandParser.js'
 
@@ -13,16 +12,8 @@ import { getProjectFileList } from './commandParser.js'
  */
 export class InputHandler {
   constructor() {
-    // 当前输入缓冲区
-    this.inputBuffer = ''
-    // 光标位置
-    this.cursorPosition = 0
-    // 是否正在显示选择器
-    this.isShowingSelector = false
-    // 输入完成回调
-    this.resolveInput = null
-    // 选择器类型
-    this.selectorType = null
+    // readline 接口实例
+    this.rl = null
   }
 
   /**
@@ -31,315 +22,172 @@ export class InputHandler {
    */
   getInput() {
     return new Promise((resolve) => {
-      this.resolveInput = resolve
-      this.inputBuffer = ''
-      this.cursorPosition = 0
+      // 创建 readline 接口，配置 completer
+      this.rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout,
+        completer: (line) => this.completer(line)
+      })
 
-      // 检查是否支持原始模式（TTY 环境）
-      if (process.stdin.isTTY && typeof process.stdin.setRawMode === 'function') {
-        // 原始模式：实时监听键盘事件
-        this.useRawMode = true
+      // 监听关闭事件
+      this.rl.on('close', () => {
+        resolve('exit')
+      })
 
-        // 清除当前行并显示提示符
-        this.clearLine()
-        process.stdout.write(chalk.green('问：'))
-
-        // 启用原始模式以监听键盘事件
-        process.stdin.setRawMode(true)
-        process.stdin.resume()
-        process.stdin.setEncoding('utf8')
-
-        // 监听键盘事件
-        this.handleKeyPress = this.handleKeyPress.bind(this)
-        process.stdin.on('data', this.handleKeyPress)
-      } else {
-        // 非 TTY 环境：回退到 readline 方式
-        this.useRawMode = false
-        this.getInputWithReadline(resolve)
-      }
+      // 提示用户输入
+      this.rl.question('问：', (answer) => {
+        this.rl.close()
+        resolve(answer.trim())
+      })
     })
   }
 
   /**
-   * 使用 readline 方式获取输入（非 TTY 环境）
-   * @param {Function} resolve - Promise resolve 函数
+   * 补全函数 - 处理 / 指令和 @ 文件
+   * @param {string} line - 当前输入的文本
+   * @returns {Array} - [completions, originalText]
    */
-  getInputWithReadline(resolve) {
-    const rl = readline.createInterface({
-      input: process.stdin,
-      output: process.stdout
-    })
+  completer(line) {
+    const trimmedLine = line.trim()
 
-    rl.question('问：', (input) => {
-      rl.close()
-      resolve(input.trim())
-    })
-  }
-
-  /**
-   * 处理键盘输入
-   * @param {string} data - 按键数据
-   */
-  async handleKeyPress(data) {
-    const key = data.toString()
-
-    // 如果正在显示选择器，不处理输入
-    if (this.isShowingSelector) {
-      return
+    // 处理 / 指令补全
+    if (trimmedLine.startsWith('/')) {
+      return this.completeCommand(trimmedLine)
     }
 
-    // 处理特殊按键
-    switch (key) {
-      case '\r': // Enter
-      case '\n':
-        this.finishInput()
-        return
-
-      case '': // Ctrl+C
-        this.cleanup()
-        process.exit(0)
-        return
-
-      case '': // Backspace
-      case '\b':
-        this.handleBackspace()
-        return
-
-      case '': // Esc
-        // 清空输入
-        this.inputBuffer = ''
-        this.cursorPosition = 0
-        this.refreshDisplay()
-        return
-
-      default:
-        // 处理普通字符
-        if (key.length === 1 && key >= ' ') {
-          await this.handleCharInput(key)
-        }
+    // 处理 @ 文件补全
+    if (trimmedLine.startsWith('@')) {
+      return this.completeFile(trimmedLine)
     }
+
+    // 普通输入，不补全
+    return [[], line]
   }
 
   /**
-   * 处理字符输入
-   * @param {string} char - 输入的字符
+   * 指令补全
+   * @param {string} line - 当前输入
+   * @returns {Array} - [completions, originalText]
    */
-  async handleCharInput(char) {
-    // 在光标位置插入字符
-    this.inputBuffer =
-      this.inputBuffer.slice(0, this.cursorPosition) +
-      char +
-      this.inputBuffer.slice(this.cursorPosition)
-    this.cursorPosition++
-
-    // 刷新显示
-    this.refreshDisplay()
-
-    // 检查是否需要触发选择器
-    await this.checkAndTriggerSelector(char)
-  }
-
-  /**
-   * 处理退格键
-   */
-  handleBackspace() {
-    if (this.cursorPosition > 0) {
-      this.inputBuffer =
-        this.inputBuffer.slice(0, this.cursorPosition - 1) +
-        this.inputBuffer.slice(this.cursorPosition)
-      this.cursorPosition--
-      this.refreshDisplay()
-    }
-  }
-
-  /**
-   * 刷新显示
-   */
-  refreshDisplay() {
-    // 清除当前行
-    this.clearLine()
-
-    // 显示提示符和输入内容
-    const beforeCursor = this.inputBuffer.slice(0, this.cursorPosition)
-    const afterCursor = this.inputBuffer.slice(this.cursorPosition)
-
-    process.stdout.write(chalk.green('问：') + beforeCursor)
-
-    // 如果光标不在末尾，移动光标
-    if (afterCursor) {
-      process.stdout.write(afterCursor)
-      readline.moveCursor(process.stdout, -afterCursor.length, 0)
-    }
-  }
-
-  /**
-   * 清除当前行
-   */
-  clearLine() {
-    readline.cursorTo(process.stdout, 0)
-    readline.clearLine(process.stdout, 0)
-  }
-
-  /**
-   * 检查并触发选择器
-   * @param {string} char - 刚输入的字符
-   */
-  async checkAndTriggerSelector(char) {
-    // 检查是否输入了 / 或 @
-    if (char === '/' && this.shouldTriggerCommandSelector()) {
-      await this.triggerCommandSelector()
-    } else if (char === '@' && this.shouldTriggerFileSelector()) {
-      await this.triggerFileSelector()
-    }
-  }
-
-  /**
-   * 判断是否应该触发指令选择器
-   * @returns {boolean}
-   */
-  shouldTriggerCommandSelector() {
-    // 条件：/ 是第一个字符，或者前面是空格
-    const beforeSlash = this.inputBuffer.slice(0, this.cursorPosition - 1)
-    return beforeSlash === '' || beforeSlash.endsWith(' ')
-  }
-
-  /**
-   * 判断是否应该触发文件选择器
-   * @returns {boolean}
-   */
-  shouldTriggerFileSelector() {
-    // 条件：@ 是第一个字符，或者前面是空格
-    const beforeAt = this.inputBuffer.slice(0, this.cursorPosition - 1)
-    return beforeAt === '' || beforeAt.endsWith(' ')
-  }
-
-  /**
-   * 触发指令选择器
-   */
-  async triggerCommandSelector() {
-    this.isShowingSelector = true
-    this.selectorType = 'command'
-
-    // 移除刚输入的 /
-    this.inputBuffer =
-      this.inputBuffer.slice(0, this.cursorPosition - 1) +
-      this.inputBuffer.slice(this.cursorPosition)
-    this.cursorPosition--
-
-    // 暂时移除键盘监听
-    process.stdin.removeListener('data', this.handleKeyPress)
-
-    // 清除当前行
-    this.clearLine()
-
-    // 显示指令选择器
+  completeCommand(line) {
     const commandList = getCommandList()
-    const result = await showCommandSelector(commandList)
+    const hits = []
+    const completions = []
 
-    // 恢复输入
-    this.isShowingSelector = false
-    this.selectorType = null
+    // 获取所有指令名称
+    for (const cmd of commandList) {
+      completions.push(cmd.name)
+    }
 
-    if (result) {
-      if (result.method === 'enter') {
-        // Enter 键：直接执行指令
-        this.cleanup()
-        if (this.resolveInput) {
-          this.resolveInput(result.item.name)
-          this.resolveInput = null
-        }
-        return
-      } else {
-        // Tab 键：填入输入框，让用户继续编辑
-        this.inputBuffer = result.item.name + ' '
-        this.cursorPosition = this.inputBuffer.length
+    // 筛选匹配的指令
+    for (const cmd of completions) {
+      if (cmd.startsWith(line)) {
+        hits.push(cmd)
       }
     }
 
-    // 刷新显示
-    this.refreshDisplay()
-
-    // 重新启用原始模式以继续监听键盘事件
-    if (process.stdin.isTTY && typeof process.stdin.setRawMode === 'function') {
-      process.stdin.setRawMode(true)
-      process.stdin.resume()
-      process.stdin.setEncoding('utf8')
+    // 如果没有匹配项，显示所有指令
+    if (hits.length === 0) {
+      // 显示所有可用指令
+      console.log('')
+      console.log(chalk.cyan.bold('可用指令：'))
+      for (const cmd of commandList) {
+        console.log(chalk.green(`  ${cmd.name.padEnd(18)}`) + chalk.white(cmd.description))
+      }
+      console.log('')
+      return [[], line]
     }
 
-    // 重新监听键盘事件
-    process.stdin.on('data', this.handleKeyPress)
+    // 显示匹配的指令描述
+    if (hits.length === 1) {
+      // 只有一个匹配项，显示描述
+      const matchedCmd = commandList.find(cmd => cmd.name === hits[0])
+      if (matchedCmd) {
+        console.log('')
+        console.log(chalk.dim(`  ${matchedCmd.description}`))
+      }
+    } else {
+      // 多个匹配项，显示列表
+      console.log('')
+      console.log(chalk.cyan.bold('匹配的指令：'))
+      for (const hit of hits) {
+        const matchedCmd = commandList.find(cmd => cmd.name === hit)
+        if (matchedCmd) {
+          console.log(chalk.green(`  ${hit.padEnd(18)}`) + chalk.white(matchedCmd.description))
+        }
+      }
+      console.log('')
+    }
+
+    return [hits, line]
   }
 
   /**
-   * 触发文件选择器
+   * 文件补全
+   * @param {string} line - 当前输入
+   * @returns {Array} - [completions, originalText]
    */
-  async triggerFileSelector() {
-    this.isShowingSelector = true
-    this.selectorType = 'file'
-
-    // 移除刚输入的 @
-    this.inputBuffer =
-      this.inputBuffer.slice(0, this.cursorPosition - 1) +
-      this.inputBuffer.slice(this.cursorPosition)
-    this.cursorPosition--
-
-    // 暂时移除键盘监听
-    process.stdin.removeListener('data', this.handleKeyPress)
-
-    // 清除当前行
-    this.clearLine()
-
-    // 显示文件选择器
+  completeFile(line) {
     const fileList = getProjectFileList()
-    const result = await showFileSelector(fileList)
+    const hits = []
+    const completions = []
 
-    // 恢复输入
-    this.isShowingSelector = false
-    this.selectorType = null
-
-    if (result) {
-      // 无论 Tab 还是 Enter，都填入输入框让用户继续编辑
-      this.inputBuffer = `@${result.item.name} `
-      this.cursorPosition = this.inputBuffer.length
+    // 获取所有文件名（添加 @ 前缀）
+    for (const file of fileList) {
+      completions.push(`@${file.name}`)
     }
 
-    // 刷新显示
-    this.refreshDisplay()
-
-    // 重新启用原始模式以继续监听键盘事件
-    if (process.stdin.isTTY && typeof process.stdin.setRawMode === 'function') {
-      process.stdin.setRawMode(true)
-      process.stdin.resume()
-      process.stdin.setEncoding('utf8')
+    // 筛选匹配的文件
+    for (const file of completions) {
+      if (file.startsWith(line)) {
+        hits.push(file)
+      }
     }
 
-    // 重新监听键盘事件
-    process.stdin.on('data', this.handleKeyPress)
-  }
-
-  /**
-   * 完成输入
-   */
-  finishInput() {
-    const input = this.inputBuffer.trim()
-    this.cleanup()
-
-    if (this.resolveInput) {
-      this.resolveInput(input)
-      this.resolveInput = null
+    // 如果没有匹配项，显示所有文件
+    if (hits.length === 0) {
+      // 显示所有可用文件
+      console.log('')
+      console.log(chalk.cyan.bold('项目文件：'))
+      for (const file of fileList) {
+        console.log(chalk.green(`  @${file.name.padEnd(30)}`) + chalk.dim(file.description || ''))
+      }
+      console.log('')
+      return [[], line]
     }
+
+    // 显示匹配的文件信息
+    if (hits.length === 1) {
+      // 只有一个匹配项，显示信息
+      const matchedFile = fileList.find(file => `@${file.name}` === hits[0])
+      if (matchedFile) {
+        console.log('')
+        console.log(chalk.dim(`  ${matchedFile.description || ''}`))
+      }
+    } else {
+      // 多个匹配项，显示列表
+      console.log('')
+      console.log(chalk.cyan.bold('匹配的文件：'))
+      for (const hit of hits) {
+        const fileName = hit.substring(1) // 移除 @ 前缀
+        const matchedFile = fileList.find(file => file.name === fileName)
+        if (matchedFile) {
+          console.log(chalk.green(`  ${hit.padEnd(30)}`) + chalk.dim(matchedFile.description || ''))
+        }
+      }
+      console.log('')
+    }
+
+    return [hits, line]
   }
 
   /**
    * 清理资源
    */
   cleanup() {
-    if (this.useRawMode) {
-      process.stdin.removeListener('data', this.handleKeyPress)
-      if (typeof process.stdin.setRawMode === 'function') {
-        process.stdin.setRawMode(false)
-      }
-      process.stdin.pause()
+    if (this.rl) {
+      this.rl.close()
+      this.rl = null
     }
   }
 }
