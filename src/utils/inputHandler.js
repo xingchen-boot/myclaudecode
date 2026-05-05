@@ -1,6 +1,7 @@
 /**
  * 输入处理器 - 支持 / 指令和 @ 文件选择
  * 输入 / 或 @ 时立即显示选择列表
+ * 支持输入法、光标选择、Tab/Enter 确认
  */
 import readline from 'readline'
 import chalk from 'chalk'
@@ -14,10 +15,10 @@ export class InputHandler {
   constructor() {
     // readline 接口实例
     this.rl = null
-    // 输入缓冲区
-    this.inputBuffer = ''
     // 是否正在显示选择器
     this.isShowingSelector = false
+    // 当前输入缓冲区
+    this.inputBuffer = ''
   }
 
   /**
@@ -33,7 +34,8 @@ export class InputHandler {
       // 创建 readline 接口
       this.rl = readline.createInterface({
         input: process.stdin,
-        output: process.stdout
+        output: process.stdout,
+        completer: (line) => this.completer(line)
       })
 
       // 监听行输入
@@ -89,6 +91,88 @@ export class InputHandler {
       // 显示提示符
       this.rl.prompt()
     })
+  }
+
+  /**
+   * 补全函数 - 处理 / 指令和 @ 文件
+   * @param {string} line - 当前输入的文本
+   * @returns {Array} - [completions, originalText]
+   */
+  completer(line) {
+    const trimmedLine = line.trim()
+
+    // 处理 / 指令补全
+    if (trimmedLine.startsWith('/')) {
+      return this.completeCommand(trimmedLine)
+    }
+
+    // 处理 @ 文件补全
+    if (trimmedLine.startsWith('@')) {
+      return this.completeFile(trimmedLine)
+    }
+
+    // 普通输入，不补全
+    return [[], line]
+  }
+
+  /**
+   * 指令补全
+   * @param {string} line - 当前输入
+   * @returns {Array} - [completions, originalText]
+   */
+  completeCommand(line) {
+    const commandList = getCommandList()
+    const hits = []
+    const completions = []
+
+    // 获取所有指令名称
+    for (const cmd of commandList) {
+      completions.push(cmd.name)
+    }
+
+    // 筛选匹配的指令
+    for (const cmd of completions) {
+      if (cmd.startsWith(line)) {
+        hits.push(cmd)
+      }
+    }
+
+    // 如果没有匹配项，显示所有指令
+    if (hits.length === 0) {
+      return [completions, line]
+    }
+
+    return [hits, line]
+  }
+
+  /**
+   * 文件补全
+   * @param {string} line - 当前输入
+   * @returns {Array} - [completions, originalText]
+   */
+  completeFile(line) {
+    const fileList = getProjectFileList()
+    const hits = []
+    const completions = []
+
+    // 获取所有文件名（添加 @ 前缀）
+    for (const file of fileList) {
+      completions.push(`@${file.name}`)
+    }
+
+    // 筛选匹配的文件
+    for (const file of completions) {
+      if (file.startsWith(line)) {
+        hits.push(file)
+      }
+    }
+
+    // 如果没有匹配项，显示所有文件
+    if (hits.length === 0) {
+      return [completions, line]
+    }
+
+    return [hits, line]
   }
 
   /**
