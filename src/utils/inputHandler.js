@@ -1,6 +1,6 @@
 /**
  * 输入处理器 - 支持 / 指令和 @ 文件选择
- * 输入 / 或 @ 时立即显示选择列表
+ * 输入 / 或 @ 时自动显示选择列表
  * 支持输入法、光标选择、Tab/Enter 确认
  */
 import readline from 'readline'
@@ -17,8 +17,8 @@ export class InputHandler {
     this.rl = null
     // 是否正在显示选择器
     this.isShowingSelector = false
-    // 当前输入缓冲区
-    this.inputBuffer = ''
+    // 上一次输入的内容
+    this.lastInput = ''
   }
 
   /**
@@ -28,8 +28,8 @@ export class InputHandler {
   getInput() {
     return new Promise((resolve) => {
       this.resolveInput = resolve
-      this.inputBuffer = ''
       this.isShowingSelector = false
+      this.lastInput = ''
 
       // 创建 readline 接口
       this.rl = readline.createInterface({
@@ -42,39 +42,6 @@ export class InputHandler {
       this.rl.on('line', async (line) => {
         const trimmedLine = line.trim()
 
-        // 检查是否需要触发选择器
-        if (trimmedLine === '/' || trimmedLine === '@') {
-          // 暂停 readline
-          this.rl.pause()
-
-          if (trimmedLine === '/') {
-            // 显示指令选择器
-            const selected = await this.showCommandSelector()
-            if (selected) {
-              // 用户选择了指令，填入输入框
-              this.rl.resume()
-              this.rl.write(selected + ' ')
-              // 继续等待用户输入
-              return
-            }
-          } else if (trimmedLine === '@') {
-            // 显示文件选择器
-            const selected = await this.showFileSelector()
-            if (selected) {
-              // 用户选择了文件，填入输入框
-              this.rl.resume()
-              this.rl.write(`@${selected} `)
-              // 继续等待用户输入
-              return
-            }
-          }
-
-          // 用户取消了选择，恢复 readline
-          this.rl.resume()
-          this.rl.prompt()
-          return
-        }
-
         // 普通输入，直接返回
         this.rl.close()
         resolve(trimmedLine)
@@ -85,6 +52,54 @@ export class InputHandler {
         if (this.resolveInput) {
           this.resolveInput('exit')
           this.resolveInput = null
+        }
+      })
+
+      // 监听按键事件，检测 / 和 @
+      this.rl.on('keypress', async (char, key) => {
+        // 如果正在显示选择器，不处理
+        if (this.isShowingSelector) {
+          return
+        }
+
+        // 获取当前行内容
+        const line = this.rl.line || ''
+
+        // 检测是否输入了 / 或 @
+        if (line === '/' || line === '@') {
+          // 暂停 readline
+          this.rl.pause()
+          this.isShowingSelector = true
+
+          let selected = null
+
+          if (line === '/') {
+            // 显示指令选择器
+            selected = await this.showCommandSelector()
+          } else if (line === '@') {
+            // 显示文件选择器
+            selected = await this.showFileSelector()
+          }
+
+          this.isShowingSelector = false
+
+          if (selected) {
+            // 用户选择了项目，清空当前行并写入选择的内容
+            this.rl.resume()
+            // 清空当前行
+            readline.clearLine(process.stdout, 0)
+            readline.cursorTo(process.stdout, 0)
+            // 重新显示提示符和选择的内容
+            process.stdout.write('问：')
+            if (line === '/') {
+              this.rl.write(selected + ' ')
+            } else {
+              this.rl.write(`@${selected} `)
+            }
+          } else {
+            // 用户取消了选择，恢复 readline
+            this.rl.resume()
+          }
         }
       })
 
