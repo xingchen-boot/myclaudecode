@@ -1,19 +1,14 @@
 import 'dotenv/config'
 import readline from 'readline'
-import OpenAI from 'openai'
+import { chat, createClient } from './request/index.js'
 
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-  baseURL: process.env.OPENAI_BASE_URL
-})
-
-const messages = []
-
+// 创建 readline 接口，绑定标准输入输出
 const rl = readline.createInterface({
   input: process.stdin,
   output: process.stdout
 })
 
+// 获取用户输入的异步函数
 function prompt() {
   return new Promise((resolve) => {
     rl.question('\x1b[36m你: \x1b[0m', (input) => {
@@ -22,35 +17,10 @@ function prompt() {
   })
 }
 
-async function chat(userMessage) {
-  messages.push({ role: 'user', content: userMessage })
-
-  try {
-    const stream = await client.chat.completions.create({
-      model: process.env.OPENAI_MODEL,
-      messages,
-      stream: true
-    })
-
-    let assistantMessage = ''
-    process.stdout.write('\x1b[32mAI: \x1b[0m')
-
-    for await (const chunk of stream) {
-      const content = chunk.choices[0]?.delta?.content || ''
-      if (content) {
-        process.stdout.write(content)
-        assistantMessage += content
-      }
-    }
-
-    console.log('')
-    messages.push({ role: 'assistant', content: assistantMessage })
-  } catch (error) {
-    console.error('\x1b[31m请求出错:\x1b[0m', error.message)
-  }
-}
-
+// 主函数，程序入口
 async function main() {
+  // 创建 OpenAI 客户端实例
+  const client = createClient()
   console.log('\x1b[1m\x1b[35m=== AI 终端助手 ===\x1b[0m')
   console.log('输入消息开始对话，输入 "exit" 或 "quit" 退出\n')
 
