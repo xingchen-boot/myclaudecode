@@ -256,8 +256,17 @@ export class InputHandler {
       }
     }
 
-    // 刷新显示并继续监听
+    // 刷新显示
     this.refreshDisplay()
+
+    // 重新启用原始模式以继续监听键盘事件
+    if (process.stdin.isTTY && typeof process.stdin.setRawMode === 'function') {
+      process.stdin.setRawMode(true)
+      process.stdin.resume()
+      process.stdin.setEncoding('utf8')
+    }
+
+    // 重新监听键盘事件
     process.stdin.on('data', this.handleKeyPress)
   }
 
