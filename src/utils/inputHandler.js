@@ -298,23 +298,22 @@ export class InputHandler {
     this.selectorType = null
 
     if (result) {
-      if (result.method === 'enter') {
-        // Enter 键：直接执行（发送文件内容给 AI）
-        this.cleanup()
-        if (this.resolveInput) {
-          this.resolveInput(`@${result.item.name}`)
-          this.resolveInput = null
-        }
-        return
-      } else {
-        // Tab 键：填入输入框，让用户继续编辑
-        this.inputBuffer = `@${result.item.name} `
-        this.cursorPosition = this.inputBuffer.length
-      }
+      // 无论 Tab 还是 Enter，都填入输入框让用户继续编辑
+      this.inputBuffer = `@${result.item.name} `
+      this.cursorPosition = this.inputBuffer.length
     }
 
-    // 刷新显示并继续监听
+    // 刷新显示
     this.refreshDisplay()
+
+    // 重新启用原始模式以继续监听键盘事件
+    if (process.stdin.isTTY && typeof process.stdin.setRawMode === 'function') {
+      process.stdin.setRawMode(true)
+      process.stdin.resume()
+      process.stdin.setEncoding('utf8')
+    }
+
+    // 重新监听键盘事件
     process.stdin.on('data', this.handleKeyPress)
   }
 
