@@ -1,8 +1,9 @@
 /**
  * 整个项目的启动入口
- * 支持指令选择（/）和文件引用（@）的实时交互
+ * 支持指令选择（/）和文件引用（@）
  */
 import ora from 'ora'
+import chalk from 'chalk'
 import { createOpenAIClient, getAIResponse } from "./request/index.js"
 import logger from "./utils/logger.js"
 import { welcomeLog } from "./utils/init.js"
@@ -118,6 +119,10 @@ async function promptUser() {
 
 // 显示欢迎信息
 welcomeLog()
+
+// 显示使用提示
+console.log(chalk.dim('提示：输入 / 后按 Tab 查看指令列表，输入 @ 后按 Tab 查看文件列表'))
+console.log('')
 
 // 启动对话
 promptUser()
