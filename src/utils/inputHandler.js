@@ -241,15 +241,17 @@ export class InputHandler {
     this.selectorType = null
 
     if (selectedItem) {
-      // 用户选择了指令，填入输入框
-      this.inputBuffer = selectedItem.name + ' '
-      this.cursorPosition = this.inputBuffer.length
+      // 用户选择了指令，直接执行（不填入输入框）
+      this.cleanup()
+      if (this.resolveInput) {
+        this.resolveInput(selectedItem.name)
+        this.resolveInput = null
+      }
+      return
     }
 
-    // 刷新显示
+    // 用户取消了选择，刷新显示并继续监听
     this.refreshDisplay()
-
-    // 重新监听键盘事件
     process.stdin.on('data', this.handleKeyPress)
   }
 
@@ -281,15 +283,13 @@ export class InputHandler {
     this.selectorType = null
 
     if (selectedItem) {
-      // 用户选择了文件，填入输入框
+      // 用户选择了文件，填入输入框让用户继续输入问题
       this.inputBuffer = `@${selectedItem.name} `
       this.cursorPosition = this.inputBuffer.length
     }
 
-    // 刷新显示
+    // 刷新显示并继续监听
     this.refreshDisplay()
-
-    // 重新监听键盘事件
     process.stdin.on('data', this.handleKeyPress)
   }
 
