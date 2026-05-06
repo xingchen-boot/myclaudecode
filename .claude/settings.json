@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node -c src/app.js)",
+      "Bash(node -c src/utils/inputHandler.js)"
+    ]
+  }
+}

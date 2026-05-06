@@ -11,9 +11,14 @@ import { writeHistoryToFrontFile } from "./utils/fsHandle.js"
 import { createInputHandler } from "./utils/inputHandler.js"
 import { parseInput, processFileReferences } from "./utils/commandParser.js"
 import { executeCommand, loadCustomCommands } from "./commands/index.js"
+import { readSystem, getUserContext } from "./utils/contextRead.js"
 
 // 创建 OpenAI 客户端实例
 const openai = createOpenAIClient()
+
+// 启动时缓存系统上下文和用户上下文（避免每次对话重复读取文件）
+const systemContext = readSystem()
+const userContext = getUserContext()
 
 // 加载自定义指令
 loadCustomCommands()
@@ -83,10 +88,17 @@ async function promptUser() {
         // 显示加载提示
         const spinner = ora('AI 正在思考...').start()
 
+        // 构建包含上下文的临时消息数组（不影响对话记录）
+        const messagesWithContext = [
+          { role: 'system', content: systemContext },
+          { role: 'user', content: userContext },
+          ...messages
+        ]
+
         // 获取 AI 回复
         const aiResponse = await getAIResponse({
           openai,
-          messages
+          messages: messagesWithContext
         })
 
         // 添加 AI 回复到历史
@@ -128,10 +140,16 @@ async function promptUser() {
     // 显示加载提示
     const spinner = ora('AI 正在思考...').start()
 
+    // 构建包含 system 上下文的临时消息数组
+    const messagesWithContext = [
+      { role: 'system', content: readSystem() },
+      ...messages
+    ]
+
     // 获取 AI 回复
     const aiResponse = await getAIResponse({
       openai,
-      messages
+      messages: messagesWithContext
     })
 
     // 添加 AI 回复到历史
