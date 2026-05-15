@@ -204,36 +204,100 @@ export function getCommandList() {
 }
 
 /**
+ * 获取所有指令列表（别名，供 input 模块使用）
+ * @returns {Array} - 指令数组 [{name, description}]
+ */
+export function getAllCommands() {
+  return getCommandList()
+}
+
+/**
+ * 根据关键词筛选指令
+ * @param {string} query - 筛选关键词
+ * @returns {Array} - 匹配的指令数组 [{name, description}]
+ */
+export function filterCommands(query) {
+  const all = getCommandList()
+  if (!query) return all
+  const lowerQuery = query.toLowerCase()
+  return all.filter(cmd =>
+    cmd.name.toLowerCase().includes(lowerQuery) ||
+    cmd.description.toLowerCase().includes(lowerQuery)
+  )
+}
+
+/**
+ * 判断输入是否为指令
+ * @param {string} input - 用户输入
+ * @returns {boolean}
+ */
+export function isCommand(input) {
+  return input.trim().startsWith('/')
+}
+
+/**
+ * 从输入中移除指令部分，返回剩余内容
+ * @param {string} input - 用户输入
+ * @returns {string} - 移除指令后的文本
+ */
+export function removeCommandFromInput(input) {
+  const trimmed = input.trim()
+  // 匹配 /xxx 开头的指令，移除指令部分
+  const match = trimmed.match(/^\/[^\s]+/)
+  if (match) {
+    return trimmed.slice(match[0].length).trim()
+  }
+  return trimmed
+}
+
+/**
  * 执行指令
- * @param {string} command - 指令名称
- * @param {string} args - 指令参数
+ * @param {string} input - 用户完整输入（如 "/help" 或 "/clear"）
  * @param {Object} context - 执行上下文
  * @param {Array} context.messages - 对话历史
- * @param {Function} context.clearMessages - 清空对话历史的函数
- * @returns {Promise<Object>} - 执行结果
- *   - shouldContinue: 是否继续对话（false 表示退出程序）
- *   - type: 指令类型（'blocking' 或 'non-blocking'）
- *   - result: 指令执行结果（非阻断类指令返回的字符串）
+ * @param {Object} context.rl - readline 实例
+ * @param {Function} context.promptUser - 重新提示输入的函数
+ * @returns {boolean|string} - 执行结果
+ *   - true: 阻断类指令，已处理完毕
+ *   - string: 非阻断类指令，返回结果文本
+ *   - false: 未识别的指令
  */
-export async function executeCommand(command, args, context = {}) {
+export function executeCommand(input, context = {}) {
+  const trimmed = input.trim()
+  // 解析指令名称和参数
+  const spaceIndex = trimmed.indexOf(' ')
+  const command = spaceIndex !== -1 ? trimmed.slice(0, spaceIndex) : trimmed
+  const args = spaceIndex !== -1 ? trimmed.slice(spaceIndex + 1).trim() : ''
+
   const cmd = commands[command]
 
   if (!cmd) {
     console.log(chalk.red(`未知指令: ${command}`))
     console.log(chalk.yellow('输入 /help 查看可用指令'))
-    return { shouldContinue: true, type: 'blocking', result: null }
+    return false
   }
 
   try {
-    const result = await cmd.handler(args, context)
-    return {
-      shouldContinue: result !== false,
-      type: cmd.type || 'blocking',
-      result: cmd.type === 'non-blocking' ? result : null
+    const result = cmd.handler(args, context)
+
+    // 退出指令
+    if (result === false) {
+      console.log('')
+      console.log(chalk.yellow('再见！感谢使用 AI 终端助手。👋'))
+      console.log('')
+      process.exit(0)
     }
+
+    // 阻断类指令：直接返回 true
+    if (cmd.type === 'blocking') {
+      return true
+    }
+
+    // 非阻断类指令：返回结果字符串
+    return typeof result === 'string' ? result : String(result)
   } catch (error) {
     console.log(chalk.red(`执行指令失败: ${error.message}`))
-    return { shouldContinue: true, type: 'blocking', result: null }
+    return true
   }
 }
 
