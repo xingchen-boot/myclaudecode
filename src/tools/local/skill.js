@@ -4,7 +4,7 @@ import path from 'path';
 export default {
     define: {
         name: "skill",
-        description: "加载skill的详情时使用",
+        description: "读取指定skill文件的完整内容。仅当用户明确要求加载某个skill，或需要查看skill文件内容时使用。",
         inputSchema: {
             type: "object",
             properties: {

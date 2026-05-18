@@ -38,7 +38,7 @@ export function createOpenAIClient() {
 
 // 与 AI 对话的异步函数
 export async function getAIResponse(questionObj) {
-  const { openai, toolResult, contextMessageList, messages } = questionObj
+  const { openai, toolResult, contextMessageList, messages, spinner } = questionObj
   const config = loadConfig()
 
   try {
@@ -61,11 +61,14 @@ export async function getAIResponse(questionObj) {
     // 检查是否有工具调用
     if(aiMessage.tool_calls && aiMessage.tool_calls.length > 0) {
 
+      // 工具调用前停掉spinner，避免清行冲突
+      if (spinner) spinner.stop()
+
       //执行所有工具调用
       for(const toolCall of aiMessage.tool_calls) {
         const functionName = toolCall.function.name
         const functionArgs = JSON.parse(toolCall.function.arguments)
-        console.log(chalk.green('开始执行工具：' + functionName ))
+        console.log(chalk.dim(`[工具] ${functionName} ...`))
         //自己调用太麻烦，直接用excuteTool
         const excuteResult = await excuteTool(functionName, functionArgs)
         //将工具响应到消息
@@ -74,9 +77,9 @@ export async function getAIResponse(questionObj) {
           tool_call_id: toolCall.id,
           content: excuteResult
         })
-        console.log(chalk.green('工具执行完成：' + functionName ))
+        console.log(chalk.green(`[工具] ${functionName} ✓`))
       }
-      await getAIResponse(questionObj)
+      return await getAIResponse(questionObj)
     // 返回 AI 回复
     } 
     //如果没有工具调用，直接返回整个消息

@@ -72,6 +72,12 @@ function handleKeyPress(char, key) {
  * 处理正常模式按键
  */
 function handleNormalKey(char, key) {
+  // Ctrl+C 退出程序
+  if (key.ctrl && char === 'c') {
+    process.stdout.write('\n')
+    process.exit(0)
+  }
+
   if (key.name === 'return') {
     submitInput();
     return;

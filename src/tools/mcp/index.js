@@ -78,7 +78,8 @@ export async function linkMcpAndListTool(targetList, targetMap) {
                 transport = new StdioClientTransport({
                     command,
                     args,
-                    env
+                    env,
+                    stderr: 'ignore'
                 })
             }
 

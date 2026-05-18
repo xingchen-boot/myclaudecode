@@ -1,5 +1,192 @@
 # 更新日志
 
+## 2026-05-05 - 删除数组排序工具模块
+
+### 删除操作
+- **删除数组排序工具文件**：根据用户要求，删除了数组排序工具模块
+  - 删除文件：`src/utils/arraySort.js`
+  - 执行命令：`Remove-Item -Path "src\utils\arraySort.js" -Force`
+- **操作结果**：数组排序工具文件已成功删除
+
+### 原因说明
+- 用户要求删除数组排序工具文件
+- 已通过confirm工具确认删除操作
+
+---
+
+## 2026-05-05 - 新增数组排序工具模块
+
+### 新增功能
+- **数组排序算法实现**：创建数组排序工具模块，提供多种经典排序算法
+  - `bubbleSort(array, ascending)` - 冒泡排序算法，通过相邻元素比较和交换排序
+  - `selectionSort(array, ascending)` - 选择排序算法，每次选择极值元素放到正确位置
+  - `insertionSort(array, ascending)` - 插入排序算法，将未排序元素插入已排序部分
+  - `quickSort(array, ascending)` - 快速排序算法，使用分治法进行高效排序
+  - `builtInSort(array, ascending, compareFunction)` - JavaScript内置排序方法的封装
+- **排序工具类**：提供`ArraySorter`类，支持链式调用和统一接口
+- **排序方向控制**：所有排序算法都支持升序（默认）和降序排序
+- **数组安全性**：所有排序方法都返回新数组，不修改原数组
+- **类型支持**：支持数字和字符串数组排序，自动处理类型转换
+
+### 新增文件
+- `src/utils/arraySort.js` - 数组排序工具模块，包含所有排序算法实现
+
+### 使用示例
+```javascript
+import { bubbleSort, selectionSort, insertionSort, quickSort, builtInSort, ArraySorter } from './utils/arraySort.js';
+
+// 示例数组
+const numbers = [64, 34, 25, 12, 22, 11, 90];
+const strings = ['banana', 'apple', 'cherry', 'date'];
+
+// 使用冒泡排序（升序）
+const bubbleSorted = bubbleSort(numbers); // [11, 12, 22, 25, 34, 64, 90]
+
+// 使用选择排序（降序）
+const selectionSorted = selectionSort(numbers, false); // [90, 64, 34, 25, 22, 12, 11]
+
+// 使用插入排序
+const insertionSorted = insertionSort(strings); // ['apple', 'banana', 'cherry', 'date']
+
+// 使用快速排序
+const quickSorted = quickSort(numbers); // [11, 12, 22, 25, 34, 64, 90]
+
+// 使用内置排序
+const builtinSorted = builtInSort(numbers); // [11, 12, 22, 25, 34, 64, 90]
+
+// 使用ArraySorter类
+const sorter = new ArraySorter(numbers);
+const sorted = sorter.sort('quick', true); // 使用快速排序，升序
+const bubbleSorted2 = sorter.bubbleSort(); // 使用冒泡排序
+```
+
+### 技术实现
+- 遵循ESModule规范，使用`export`导出函数和类
+- 包含完整的JSDoc注释，便于IDE提示和文档生成
+- 所有排序算法都创建数组副本，确保原数组不被修改
+- 支持数字和字符串的排序，自动处理类型转换
+- 提供统一的`ArraySorter`类，简化排序操作
+
+---
+
+## 2026-05-05 - 新增数学工具函数模块
+
+### 新增功能
+- **数学计算方法**：创建数学工具函数模块，提供常用的数学计算方法
+  - `sum(num1, num2)` - 计算两数之和
+  - `sumArray(numbers)` - 计算多个数字的累加和
+  - `subtract(num1, num2)` - 计算两数之差
+  - `multiply(num1, num2)` - 计算两数之积
+  - `divide(num1, num2)` - 计算两数之商
+  - `power(base, exponent)` - 计算数字的幂
+- **类型检查**：所有方法都包含参数类型检查，确保输入为数字类型
+- **错误处理**：对非法输入抛出明确的TypeError异常
+- **空值处理**：正确处理NaN值，除数为0时抛出错误
+
+### 新增文件
+- `src/utils/mathUtils.js` - 数学工具函数模块，包含所有数学计算方法
+
+### 使用示例
+```javascript
+import { sum, sumArray, subtract, multiply, divide, power } from './utils/mathUtils.js';
+
+// 两数之和
+sum(5, 3); // 返回 8
+
+// 数组累加和
+sumArray([1, 2, 3, 4, 5]); // 返回 15
+
+// 两数之差
+subtract(10, 4); // 返回 6
+
+// 两数之积
+multiply(3, 4); // 返回 12
+
+// 两数之商
+divide(10, 2); // 返回 5
+
+// 幂运算
+power(2, 3); // 返回 8
+```
+
+### 技术实现
+- 遵循ESModule规范，使用`export`导出函数
+- 包含完整的JSDoc注释，便于IDE提示和文档生成
+- 使用`typeof`进行数字类型检查
+- 使用`isNaN`检查NaN值
+- 使用`Math.pow`进行幂运算
+
+---
+
+## 2026-05-05 - 删除数组工具函数模块
+
+### 删除操作
+- **删除数组工具函数文件**：根据用户要求，删除了数组工具函数模块
+  - 删除文件：`src/utils/arrayUtils.js`
+  - 执行命令：`del "src\utils\arrayUtils.js"`
+- **操作结果**：数组工具函数文件已成功删除
+
+### 原因说明
+- 用户要求删除数组工具函数文件
+- 已通过confirm工具确认删除操作
+
+---
+
+## 2026-05-05 - 新增数组工具函数模块
+
+### 新增功能
+- **数组累加方法**：创建数组工具函数模块，提供常用的数组操作方法
+  - `sum(numbers)` - 计算数组元素的累加和
+  - `sumWithInitial(numbers, initialValue)` - 计算数组元素的累加和（支持初始值）
+  - `product(numbers)` - 计算数组元素的累加积（乘法累加）
+  - `average(numbers)` - 计算数组元素的平均值
+- **类型检查**：所有方法都包含参数类型检查，确保输入为数字数组
+- **错误处理**：对非法输入抛出明确的TypeError异常
+- **空数组处理**：正确处理空数组的情况，sum返回0，product返回1，average返回NaN
+
+### 新增文件
+- `src/utils/arrayUtils.js` - 数组工具函数模块，包含所有数组操作方法
+
+### 使用示例
+```javascript
+import { sum, sumWithInitial, product, average } from './utils/arrayUtils.js';
+
+// 基本累加
+sum([1, 2, 3, 4, 5]); // 返回 15
+
+// 带初始值的累加
+sumWithInitial([1, 2, 3, 4], 10); // 返回 20
+
+// 累乘
+product([1, 2, 3, 4, 5]); // 返回 120
+
+// 平均值
+average([1, 2, 3, 4, 5]); // 返回 3
+```
+
+### 技术实现
+- 使用ES6的`reduce`方法进行累加和累乘操作
+- 遵循ESModule规范，使用`export`导出函数
+- 包含完整的JSDoc注释，便于IDE提示和文档生成
+- 使用`Array.isArray`进行数组类型检查
+- 使用`typeof`进行数字类型检查
+
+---
+
+## 2026-05-05 - 删除spec目录下的所有文件
+
+### 修改操作
+- **删除spec目录下的所有文件**：根据用户要求，删除了spec目录下的所有文件
+  - 删除文件：`spec\design.md`、`spec\technology.md`
+  - 执行命令：`Remove-Item -Path spec\* -Force`
+- **操作结果**：spec目录现在为空
+
+### 原因说明
+- 用户要求清理spec目录下的文件
+- 已通过confirm工具确认删除操作
+
+---
+
 ## 2026-05-05 - 实现自定义指令功能
 
 ### 新增功能
@@ -117,3 +304,17 @@
 - app.js 将 writeHistoryToFrontFile 调用从 rl.on('close') 移到每轮对话结束后，确保历史记录及时保存
 - request/index.js 配置路径从 front/ 改为 .front/，与 history 目录统一
 - 将旧的 ~/front/settings.json 迁移到 ~/.front/settings.json
+
+## 2026-05-05 - 删除数学工具函数模块
+
+### 删除操作
+- **删除数学工具函数文件**：根据用户要求，删除了数学工具函数模块
+  - 删除文件：`src/utils/mathUtils.js`
+  - 执行命令：`Remove-Item -Path "D:\自己练习\frontcode\src\utils\mathUtils.js" -Force`
+- **操作结果**：数学工具函数文件已成功删除
+
+### 原因说明
+- 用户要求删除数学工具函数文件
+- 已通过confirm工具确认删除操作
+
+---

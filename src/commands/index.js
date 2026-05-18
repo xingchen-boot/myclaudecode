@@ -252,52 +252,35 @@ export function removeCommandFromInput(input) {
 
 /**
  * 执行指令
- * @param {string} input - 用户完整输入（如 "/help" 或 "/clear"）
+ * @param {string} command - 指令名称（如 "/help"）
+ * @param {string} args - 指令参数
  * @param {Object} context - 执行上下文
  * @param {Array} context.messages - 对话历史
- * @param {Object} context.rl - readline 实例
- * @param {Function} context.promptUser - 重新提示输入的函数
- * @returns {boolean|string} - 执行结果
- *   - true: 阻断类指令，已处理完毕
- *   - string: 非阻断类指令，返回结果文本
- *   - false: 未识别的指令
+ * @param {Function} context.clearMessages - 清空对话历史的函数
+ * @returns {Promise<Object>} - 执行结果
+ *   - shouldContinue: 是否继续对话（false 表示退出程序）
+ *   - type: 指令类型（'blocking' 或 'non-blocking'）
+ *   - result: 指令执行结果（非阻断类指令返回的字符串）
  */
-export function executeCommand(input, context = {}) {
-  const trimmed = input.trim()
-  // 解析指令名称和参数
-  const spaceIndex = trimmed.indexOf(' ')
-  const command = spaceIndex !== -1 ? trimmed.slice(0, spaceIndex) : trimmed
-  const args = spaceIndex !== -1 ? trimmed.slice(spaceIndex + 1).trim() : ''
-
+export async function executeCommand(command, args, context = {}) {
   const cmd = commands[command]
 
   if (!cmd) {
     console.log(chalk.red(`未知指令: ${command}`))
     console.log(chalk.yellow('输入 /help 查看可用指令'))
-    return false
+    return { shouldContinue: true, type: 'blocking', result: null }
   }
 
   try {
-    const result = cmd.handler(args, context)
-
-    // 退出指令
-    if (result === false) {
-      console.log('')
-      console.log(chalk.yellow('再见！感谢使用 AI 终端助手。👋'))
-      console.log('')
-      process.exit(0)
+    const result = await cmd.handler(args, context)
+    return {
+      shouldContinue: result !== false,
+      type: cmd.type || 'blocking',
+      result: cmd.type === 'non-blocking' ? result : null
     }
-
-    // 阻断类指令：直接返回 true
-    if (cmd.type === 'blocking') {
-      return true
-    }
-
-    // 非阻断类指令：返回结果字符串
-    return typeof result === 'string' ? result : String(result)
   } catch (error) {
     console.log(chalk.red(`执行指令失败: ${error.message}`))
-    return true
+    return { shouldContinue: true, type: 'blocking', result: null }
   }
 }
 

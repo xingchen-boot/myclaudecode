@@ -14,7 +14,11 @@ export const mcpReady = linkMcpAndListTool(tools, toolNameMap).catch(() => {})
 
 // 执行工具
 export async function excuteTool(name, args) {
-    const result = await toolNameMap[name].callTool({
+    const client = toolNameMap[name]
+    if (!client) {
+        return `错误：工具 "${name}" 不存在，请检查可用工具列表`
+    }
+    const result = await client.callTool({
         name: name,
         arguments: args
     })
