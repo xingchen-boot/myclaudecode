@@ -2,6 +2,7 @@ import OpenAI from 'openai'
 import chalk from 'chalk'
 import fs from 'fs'
 import path from 'path'
+import readline from 'readline'
 import { getUserHomeDir, getCurrentWorkDir } from '../utils/pathUtils.js'
 import { transformToOpenAi } from '../tools/util.js'
 import { excuteTool } from '../tools/index.js'
@@ -62,13 +63,20 @@ export async function getAIResponse(questionObj) {
     if(aiMessage.tool_calls && aiMessage.tool_calls.length > 0) {
 
       // 工具调用前停掉spinner，避免清行冲突
-      if (spinner) spinner.stop()
+      if (spinner) {
+        // 使用 clear() 清除 spinner 输出，然后停止
+        spinner.clear()
+        spinner.stop()
+        // 确保光标在新行
+        process.stdout.write('\n')
+      }
 
       //执行所有工具调用
       for(const toolCall of aiMessage.tool_calls) {
         const functionName = toolCall.function.name
         const functionArgs = JSON.parse(toolCall.function.arguments)
-        console.log(chalk.dim(`[工具] ${functionName} ...`))
+        // 输出工具调用信息（使用 process.stdout.write 避免额外换行）
+        process.stdout.write(chalk.dim(`[工具] ${functionName} ...\n`))
         //自己调用太麻烦，直接用excuteTool
         const excuteResult = await excuteTool(functionName, functionArgs)
         //将工具响应到消息
@@ -77,11 +85,18 @@ export async function getAIResponse(questionObj) {
           tool_call_id: toolCall.id,
           content: excuteResult
         })
-        console.log(chalk.green(`[工具] ${functionName} ✓`))
+        // 输出工具调用完成信息
+        process.stdout.write(chalk.green(`[工具] ${functionName} ✓\n`))
       }
+
+      // 重新启动 spinner 显示"正在思考"
+      if (spinner) {
+        spinner.start('AI 正在思考...')
+      }
+
       return await getAIResponse(questionObj)
     // 返回 AI 回复
-    } 
+    }
     //如果没有工具调用，直接返回整个消息
     return messages
   } catch (error) {

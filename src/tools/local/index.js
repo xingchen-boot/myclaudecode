@@ -8,10 +8,8 @@ import write_file from './write_file.js';
 import glob from './glob.js';
 import confirm from './confirm.js';
 import select from './select.js';
-console.log(await glob.handle({
-    pattern: "src/tools/local/*.js",
-}))
-
+import memory_save from './memory_save.js';
+import memory_get from './memory_get.js';
 
 
 
@@ -25,6 +23,8 @@ export default function getLocalTool() {
     localClient.registerTool(glob);
     localClient.registerTool(confirm);
     localClient.registerTool(select);
+    localClient.registerTool(memory_save);
+    localClient.registerTool(memory_get);
 
     const localTools = localClient.listTools();
     //遍历localTools形成map映射

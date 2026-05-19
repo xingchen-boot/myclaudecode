@@ -3,6 +3,7 @@ import { join, dirname, relative } from 'path'
 import { fileURLToPath } from 'url'
 import os from 'os'
 import picomatch from 'picomatch'
+import { getNowMemory } from './memoryUtils.js'
 
 // 获取当前文件的目录路径
 const __filename = fileURLToPath(import.meta.url)
@@ -60,11 +61,16 @@ export function getUserContext() {
         // 文件不存在，保持空字符串
     }
 
+    // 获取记忆内容
+    const { projectMemory, userMemory } = getNowMemory()
+
     // 替换模板变量
     content = content.replace('${userPath}', userFrontPath)
     content = content.replace('${userContent}', userContent)
     content = content.replace('${projectPath}', projectFrontPath)
     content = content.replace('${projectContent}', projectContent)
+    content = content.replace(/\${userMemory}/g, userMemory)
+    content = content.replace(/\${projectMemory}/g, projectMemory)
 
     return content
 }

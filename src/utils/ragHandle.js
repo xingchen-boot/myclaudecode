@@ -292,5 +292,3 @@ export async function searchLocalVector(queryText) {
 
   return [...userResults, ...currentResults].map((r) => r.text);
 }
-
-console.log(await searchLocalVector("考勤制度是什么？"));

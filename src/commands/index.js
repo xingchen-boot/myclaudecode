@@ -9,10 +9,14 @@
  *   - 例如：.front/commands/comms/a/c.md → 指令 /a:c
  */
 import chalk from 'chalk'
+import ora from 'ora'
 import fs from 'fs'
 import path from 'path'
 import { getUserHomeDir, getCurrentWorkDir } from '../utils/pathUtils.js'
 import { storeAllFilesIn, searchFileAndStoreIn } from '../utils/ragHandle.js'
+import { getMemoryContent } from '../utils/memoryUtils.js'
+import { createOpenAIClient, getAIResponse } from '../request/index.js'
+import toolResult from '../tools/index.js'
 
 /**
  * 指令列表
@@ -66,6 +70,12 @@ export const commands = {
     name: '/vector',
     description: '将所有本地文档向量化并存入数据库，或指定单个文件 /vector <file>',
     handler: vectorFiles,
+    type: 'blocking'
+  },
+  '/memory': {
+    name: '/memory',
+    description: '生成记忆 - 调用大模型分析上下文并写入记忆文件',
+    handler: generateMemory,
     type: 'blocking'
   },
 
@@ -307,7 +317,8 @@ function showHelp() {
     { cmd: '/exit 或 /quit', desc: '退出程序' },
     { cmd: '/model', desc: '查看当前使用的模型' },
     { cmd: '/config', desc: '查看配置信息' },
-    { cmd: '/vector [file]', desc: '将所有本地文档或指定文件向量化并存入数据库' }
+    { cmd: '/vector [file]', desc: '将所有本地文档或指定文件向量化并存入数据库' },
+    { cmd: '/memory', desc: '生成记忆 - 调用大模型分析上下文并写入记忆文件' }
   ]
 
   for (const item of helpItems) {
@@ -482,6 +493,46 @@ async function vectorFiles(args) {
     }
   } catch (err) {
     console.log(chalk.red(`向量化失败: ${err.message}`))
+  }
+  return true
+}
+
+/**
+ * 生成记忆 - 调用大模型分析上下文并写入记忆文件
+ * @returns {boolean} - 是否继续对话
+ */
+async function generateMemory() {
+  const spinner = ora('AI 正在生成记忆...').start()
+  try {
+    // 1. 获取要发给大模型的记忆模板内容
+    const memoryContent = getMemoryContent()
+
+    // 2. 创建 openai 客户端
+    const openai = createOpenAIClient()
+
+    // 3. 构建只携带 memory 工具的 toolResult
+    const memoryToolResult = {
+      tools: toolResult.tools.filter(tool => tool.name === 'memorySave'),
+      toolNameMap: toolResult.toolNameMap
+    }
+
+    // 4. 构造消息：内容携带第一步的结果
+    const memoryMessages = [{ role: 'user', content: memoryContent }]
+
+    // 5. 请求大模型接口
+    await getAIResponse({
+      openai,
+      toolResult: memoryToolResult,
+      contextMessageList: [],
+      messages: memoryMessages,
+      spinner
+    })
+
+    spinner.stop()
+    console.log(chalk.green('✓ 记忆生成完成'))
+  } catch (err) {
+    spinner.stop()
+    console.log(chalk.red(`生成记忆失败: ${err.message}`))
   }
   return true
 }

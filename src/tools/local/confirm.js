@@ -1,4 +1,4 @@
-import { confirm } from '@inquirer/prompts';
+import readline from 'readline';
 
 export default {
     define: {
@@ -21,10 +21,29 @@ export default {
         }
     },
     async handle({ message, default: defaultValue = false }) {
-        const answer = await confirm({
-            message,
-            default: defaultValue
+        // 使用 readline 实现简洁的确认提示
+        const rl = readline.createInterface({
+            input: process.stdin,
+            output: process.stdout
         });
-        return answer ? "用户已确认 (yes)" : "用户已取消 (no)";
+
+        // 根据默认值显示提示
+        const defaultHint = defaultValue ? 'Y/n' : 'y/N';
+        const prompt = `${message} (${defaultHint}): `;
+
+        return new Promise((resolve) => {
+            rl.question(prompt, (answer) => {
+                rl.close();
+                const normalized = answer.trim().toLowerCase();
+                // 空输入使用默认值
+                if (normalized === '') {
+                    resolve(defaultValue ? "用户已确认 (yes)" : "用户已取消 (no)");
+                    return;
+                }
+                // 判断是否为确认
+                const isConfirmed = normalized === 'y' || normalized === 'yes';
+                resolve(isConfirmed ? "用户已确认 (yes)" : "用户已取消 (no)");
+            });
+        });
     }
 };
