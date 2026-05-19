@@ -4,6 +4,9 @@
  */
 import ora from 'ora'
 import chalk from 'chalk'
+import fs from 'fs'
+import path from 'path'
+import { fileURLToPath } from 'url'
 import { createOpenAIClient, getAIResponse } from "./request/index.js"
 import logger from "./utils/logger.js"
 import { welcomeLog } from "./utils/init.js"
@@ -13,6 +16,13 @@ import { parseInput, processFileReferences } from "./utils/commandParser.js"
 import { executeCommand, loadCustomCommands } from "./commands/index.js"
 import { readSystem, getUserContext, readRules, matchRules, getSkillHeaders } from './utils/contextRead.js'
 import toolResult from "./tools/index.js"
+import { searchLocalVector } from "./utils/ragHandle.js"
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+
+// 读取 RAG 模板
+const ragTemplate = fs.readFileSync(path.join(__dirname, './docs/ragTemplate.md'), 'utf-8')
 
 // 创建 OpenAI 客户端实例
 const openai = createOpenAIClient()
@@ -90,10 +100,19 @@ async function promptUser() {
         console.log('')
         const spinner = ora('AI 正在思考...').start()
 
+        // 搜索本地向量库，使用模板格式化 RAG 内容作为上下文
+        const ragResults = await searchLocalVector(parsed.args || '')
+        const ragMessage = { role: 'user', content: '' }
+        if (ragResults.length > 0) {
+          ragMessage.content = ragTemplate.replace('${ragContent}', ragResults.join('\n'))
+        }
+
+        const contextList = [systemMessage, userContextMessage, userSkillMessage, ragMessage]
+
         const nowMessage = await getAIResponse({
           openai,
           toolResult,
-          contextMessageList: [systemMessage, userContextMessage, userSkillMessage],
+          contextMessageList: contextList,
           messages: messages,
           spinner
         })
@@ -141,10 +160,19 @@ async function promptUser() {
     console.log('')
     const spinner = ora('AI 正在思考...').start()
 
+    // 搜索本地向量库，使用模板格式化 RAG 内容作为上下文
+    const ragTexts = await searchLocalVector(processedInput)
+    const ragMessage = { role: 'user', content: '' }
+    if (ragTexts.length > 0) {
+      ragMessage.content = ragTemplate.replace('${ragContent}', ragTexts.join('\n'))
+    }
+
+    const contextList = [systemMessage, userContextMessage, userSkillMessage, ragMessage]
+
     const nowMessage = await getAIResponse({
       openai,
       toolResult,
-      contextMessageList: [systemMessage, userContextMessage, userSkillMessage],
+      contextMessageList: contextList,
       messages: messages,
       spinner
     })

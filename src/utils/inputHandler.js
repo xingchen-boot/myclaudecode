@@ -353,30 +353,38 @@ export class InputHandler {
 
       // 渲染列表
       const render = () => {
-        // 计算需要清除的行数
-        const linesToClear = maxVisible + 4
-
-        // 清除之前的输出
+        // 清除之前的输出（使用上次实际渲染的行数）
         if (render.hasRendered) {
-          readline.moveCursor(process.stdout, 0, -linesToClear)
-          for (let i = 0; i < linesToClear; i++) {
-            readline.clearLine(process.stdout, 0)
-            if (i < linesToClear - 1) {
-              readline.moveCursor(process.stdout, 0, 1)
+          const linesToClear = render.lastLineCount || 0
+          if (linesToClear > 0) {
+            // 光标回到上次渲染区域的起始行
+            readline.moveCursor(process.stdout, 0, -linesToClear)
+            for (let i = 0; i < linesToClear; i++) {
+              readline.clearLine(process.stdout, 0)
+              if (i < linesToClear - 1) {
+                readline.moveCursor(process.stdout, 0, 1)
+              }
             }
+            // 光标回到起始行，准备重新渲染
+            readline.moveCursor(process.stdout, 0, -linesToClear + 1)
           }
-          readline.moveCursor(process.stdout, 0, -linesToClear + 1)
         }
+
+        // 记录本次渲染的行数（用于下次清除）
+        let lineCount = 0
 
         // 绘制顶部边框
         console.log(chalk.blue('┌' + '─'.repeat(50) + '┐'))
+        lineCount++
 
         // 绘制标题
         const titlePadding = Math.max(0, 50 - title.length - 2)
         console.log(chalk.blue('│') + chalk.cyan.bold(` ${title} `) + ' '.repeat(titlePadding) + chalk.blue('│'))
+        lineCount++
 
         // 绘制分隔线
         console.log(chalk.blue('├' + '─'.repeat(50) + '┤'))
+        lineCount++
 
         // 计算显示范围
         const visibleItems = filteredItems.slice(startIndex, startIndex + maxVisible)
@@ -402,20 +410,25 @@ export class InputHandler {
             // 空行
             console.log(chalk.blue('│') + ' '.repeat(50) + chalk.blue('│'))
           }
+          lineCount++
         }
 
         // 绘制底部边框
         console.log(chalk.blue('└' + '─'.repeat(50) + '┘'))
+        lineCount++
 
         // 显示筛选提示
         if (filterText) {
           console.log(chalk.yellow(`筛选: ${filterText}`))
+          lineCount++
         }
 
         // 显示操作提示
         console.log(chalk.dim('↑/↓ 选择 | Tab/Enter 确认 | Esc 取消 | 输入筛选'))
+        lineCount++
 
         render.hasRendered = true
+        render.lastLineCount = lineCount
       }
 
       // 筛选列表

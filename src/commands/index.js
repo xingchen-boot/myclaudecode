@@ -12,6 +12,7 @@ import chalk from 'chalk'
 import fs from 'fs'
 import path from 'path'
 import { getUserHomeDir, getCurrentWorkDir } from '../utils/pathUtils.js'
+import { storeAllFilesIn, searchFileAndStoreIn } from '../utils/ragHandle.js'
 
 /**
  * 指令列表
@@ -60,7 +61,14 @@ export const commands = {
     description: '查看配置信息',
     handler: showConfig,
     type: 'blocking'
-  }
+  },
+  '/vector': {
+    name: '/vector',
+    description: '将所有本地文档向量化并存入数据库，或指定单个文件 /vector <file>',
+    handler: vectorFiles,
+    type: 'blocking'
+  },
+
 }
 
 /**
@@ -298,7 +306,8 @@ function showHelp() {
     { cmd: '/history', desc: '查看当前会话的对话历史' },
     { cmd: '/exit 或 /quit', desc: '退出程序' },
     { cmd: '/model', desc: '查看当前使用的模型' },
-    { cmd: '/config', desc: '查看配置信息' }
+    { cmd: '/config', desc: '查看配置信息' },
+    { cmd: '/vector [file]', desc: '将所有本地文档或指定文件向量化并存入数据库' }
   ]
 
   for (const item of helpItems) {
@@ -451,5 +460,28 @@ function showConfig() {
     console.log(chalk.red(`读取配置失败: ${error.message}`))
   }
 
+  return true
+}
+
+/**
+ * 向量化文档并存入 LanceDB
+ * @param {string} args - 可选参数，指定文件名
+ * @returns {boolean} - 是否继续对话
+ */
+async function vectorFiles(args) {
+  try {
+    if (args) {
+      // 指定单个文件进行向量化
+      await searchFileAndStoreIn(args)
+      console.log(chalk.green(`✓ 文件 "${args}" 向量化完成`))
+    } else {
+      // 向量化所有文档
+      console.log(chalk.cyan('正在向量化所有文档...'))
+      await storeAllFilesIn()
+      console.log(chalk.green('✓ 所有文档向量化完成'))
+    }
+  } catch (err) {
+    console.log(chalk.red(`向量化失败: ${err.message}`))
+  }
   return true
 }
