@@ -1,7 +1,7 @@
 /**
  * 输入处理器 - 支持 / 指令、@ 文件选择和 # 图片选择
  * 输入 /、@ 或 # 时立即显示选择列表
- * 支持输入法、光标选择、Tab/Enter 确认、Ctrl+V 粘贴图片
+ * 支持输入法、光标移动、Tab/Enter 确认、Ctrl+V 粘贴图片
  */
 import readline from 'readline'
 import chalk from 'chalk'
@@ -25,6 +25,10 @@ export class InputHandler {
     this.cursorPosition = 0
     // 输入完成回调
     this.resolveInput = null
+    // 转义序列缓冲区
+    this.escBuffer = ''
+    // 转义序列计时器
+    this.escTimer = null
   }
 
   /**
@@ -37,6 +41,7 @@ export class InputHandler {
       this.inputBuffer = ''
       this.cursorPosition = 0
       this.isShowingSelector = false
+      this.escBuffer = ''
 
       // 清除当前行并显示提示符
       this.clearLine()
@@ -66,6 +71,43 @@ export class InputHandler {
     }
 
     const key = data.toString()
+    const keyCode = key.charCodeAt(0)
+
+    // 处理箭头键（转义序列）
+    // 左箭头: \x1B[D 或分段发送
+    if (key === '\x1B[D' || (this.escBuffer === '\x1B[' && key === 'D')) {
+      this.escBuffer = ''
+      this.moveCursorLeft()
+      return
+    }
+    if (key === '\x1B[C' || (this.escBuffer === '\x1B[' && key === 'C')) {
+      this.escBuffer = ''
+      this.moveCursorRight()
+      return
+    }
+    if (key === '\x1B[A' || (this.escBuffer === '\x1B[' && key === 'A')) {
+      this.escBuffer = ''
+      return
+    }
+    if (key === '\x1B[B' || (this.escBuffer === '\x1B[' && key === 'B')) {
+      this.escBuffer = ''
+      return
+    }
+
+    // 处理转义序列的开始
+    if (key === '\x1B') {
+      this.escBuffer = '\x1B'
+      return
+    }
+    if (this.escBuffer === '\x1B' && key === '[') {
+      this.escBuffer = '\x1B['
+      return
+    }
+
+    // 如果有未完成的转义序列，清空
+    if (this.escBuffer.length > 0) {
+      this.escBuffer = ''
+    }
 
     // 处理特殊按键
     switch (key) {
@@ -79,20 +121,34 @@ export class InputHandler {
         process.exit(0)
         return
 
-      case '': // Backspace
+      case '': // Backspace
       case '\b':
         this.handleBackspace()
         return
 
-      case '': // Esc
-        // 清空输入
-        this.inputBuffer = ''
+      case '\x16': // Ctrl+V - 粘贴图片
+        await this.handlePasteImage()
+        return
+
+      case '\x01': // Ctrl+A - 光标移到开头
         this.cursorPosition = 0
         this.refreshDisplay()
         return
 
-      case '\x16': // Ctrl+V - 粘贴图片
-        await this.handlePasteImage()
+      case '\x05': // Ctrl+E - 光标移到末尾
+        this.cursorPosition = this.inputBuffer.length
+        this.refreshDisplay()
+        return
+
+      case '\x0B': // Ctrl+K - 删除光标后的内容
+        this.inputBuffer = this.inputBuffer.slice(0, this.cursorPosition)
+        this.refreshDisplay()
+        return
+
+      case '\x15': // Ctrl+U - 删除光标前的内容
+        this.inputBuffer = this.inputBuffer.slice(this.cursorPosition)
+        this.cursorPosition = 0
+        this.refreshDisplay()
         return
 
       default:
@@ -137,6 +193,26 @@ export class InputHandler {
   }
 
   /**
+   * 光标左移
+   */
+  moveCursorLeft() {
+    if (this.cursorPosition > 0) {
+      this.cursorPosition--
+      this.refreshDisplay()
+    }
+  }
+
+  /**
+   * 光标右移
+   */
+  moveCursorRight() {
+    if (this.cursorPosition < this.inputBuffer.length) {
+      this.cursorPosition++
+      this.refreshDisplay()
+    }
+  }
+
+  /**
    * 处理 Ctrl+V 粘贴图片
    */
   async handlePasteImage() {
@@ -174,6 +250,25 @@ export class InputHandler {
   }
 
   /**
+   * 计算字符串的显示宽度（中文字符占2个宽度，ASCII字符占1个宽度）
+   * @param {string} str - 字符串
+   * @returns {number} - 显示宽度
+   */
+  getStringWidth(str) {
+    let width = 0
+    for (const char of str) {
+      const code = char.charCodeAt(0)
+      // 中文字符、全角字符等占用2个宽度
+      if (code > 0x7F) {
+        width += 2
+      } else {
+        width += 1
+      }
+    }
+    return width
+  }
+
+  /**
    * 刷新显示
    */
   refreshDisplay() {
@@ -189,7 +284,9 @@ export class InputHandler {
     // 如果光标不在末尾，移动光标
     if (afterCursor) {
       process.stdout.write(afterCursor)
-      readline.moveCursor(process.stdout, -afterCursor.length, 0)
+      // 使用显示宽度计算光标移动距离
+      const afterWidth = this.getStringWidth(afterCursor)
+      readline.moveCursor(process.stdout, -afterWidth, 0)
     }
   }
 
@@ -446,6 +543,9 @@ export class InputHandler {
    */
   cleanup() {
     process.stdin.removeListener('data', this.handleKeyPress)
+    if (this.escTimer) {
+      clearTimeout(this.escTimer)
+    }
     if (process.stdin.setRawMode) {
       process.stdin.setRawMode(false)
     }
@@ -650,14 +750,14 @@ export class InputHandler {
         }
 
         // Esc - 取消
-        if (key === '') {
+        if (key === '') {
           cleanup()
           resolve(null)
           return
         }
 
         // Backspace - 删除筛选字符
-        if (key === '' || key === '\b') {
+        if (key === '' || key === '\b') {
           if (filterText.length > 0) {
             filterText = filterText.slice(0, -1)
             filterItems()
