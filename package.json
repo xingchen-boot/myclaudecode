@@ -6,6 +6,9 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
+  "bin": {
+    "front": "./src/app.js"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",

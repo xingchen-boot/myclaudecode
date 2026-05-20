@@ -1,6 +1,8 @@
+#!/usr/bin/env node
 /**
  * 整个项目的启动入口
- * 支持指令选择（/）和文件引用（@）
+ * 支持指令选择（/）、文件引用（@）和图片选择（#）
+ * 支持 Ctrl+V 粘贴剪贴板图片
  */
 import ora from 'ora'
 import chalk from 'chalk'
@@ -12,7 +14,7 @@ import logger from "./utils/logger.js"
 import { welcomeLog } from "./utils/init.js"
 import { writeHistoryToFrontFile } from "./utils/fsHandle.js"
 import { createInputHandler } from "./utils/inputHandler.js"
-import { parseInput, processFileReferences } from "./utils/commandParser.js"
+import { parseInput, processFileReferences, processImageReferences } from "./utils/commandParser.js"
 import { executeCommand, loadCustomCommands } from "./commands/index.js"
 import { readSystem, getUserContext, readRules, matchRules, getSkillHeaders } from './utils/contextRead.js'
 import toolResult from "./tools/index.js"
@@ -149,16 +151,52 @@ async function promptUser() {
       }
     }
 
-    // 构建发送给 AI 的消息
-    let userMessage = processedInput
-    if (contextMessage) {
-      userMessage = `${processedInput}\n\n参考文件内容：\n${contextMessage}`
+    // 处理图片引用
+    let imageContents = []
+    if (parsed.hasImageRefs) {
+      const imageResult = processImageReferences(processedInput, parsed.imageRefs)
+      processedInput = imageResult.message
+      imageContents = imageResult.images
     }
 
-    messages.push({ role: 'user', content: userMessage })
+    // 构建发送给 AI 的消息
+    if (imageContents.length > 0) {
+      // 包含图片时使用多模态消息格式
+      const content = []
+
+      // 添加文本内容
+      let textContent = processedInput
+      if (contextMessage) {
+        textContent = `${processedInput}\n\n参考文件内容：\n${contextMessage}`
+      }
+      content.push({ type: 'text', text: textContent })
+
+      // 添加图片内容
+      for (const image of imageContents) {
+        content.push({
+          type: 'image_url',
+          image_url: {
+            url: `data:${image.mimeType};base64,${image.base64}`
+          }
+        })
+      }
+
+      messages.push({ role: 'user', content })
+    } else {
+      // 没有图片时使用普通文本格式
+      let userMessage = processedInput
+      if (contextMessage) {
+        userMessage = `${processedInput}\n\n参考文件内容：\n${contextMessage}`
+      }
+      messages.push({ role: 'user', content: userMessage })
+    }
 
     console.log('')
-    const spinner = ora('AI 正在思考...').start()
+    // 如果包含图片，提示使用视觉模型
+    const spinnerText = imageContents.length > 0
+      ? 'AI 正在思考... (使用视觉模型)'
+      : 'AI 正在思考...'
+    const spinner = ora(spinnerText).start()
 
     // 搜索本地向量库，使用模板格式化 RAG 内容作为上下文
     const ragTexts = await searchLocalVector(processedInput)
@@ -199,6 +237,7 @@ welcomeLog()
 
 // 显示使用提示
 console.log(chalk.dim('提示：输入 / 后按 Tab 查看指令列表，输入 @ 后按 Tab 查看文件列表'))
+console.log(chalk.dim('      输入 # 后按 Tab 查看图片列表，Ctrl+V 粘贴剪贴板图片'))
 console.log('')
 
 // 启动对话

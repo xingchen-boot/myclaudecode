@@ -1,12 +1,16 @@
 /**
- * 输入处理器 - 支持 / 指令和 @ 文件选择
- * 输入 / 或 @ 时立即显示选择列表
- * 支持输入法、光标选择、Tab/Enter 确认
+ * 输入处理器 - 支持 / 指令、@ 文件选择和 # 图片选择
+ * 输入 /、@ 或 # 时立即显示选择列表
+ * 支持输入法、光标选择、Tab/Enter 确认、Ctrl+V 粘贴图片
  */
 import readline from 'readline'
 import chalk from 'chalk'
+import fs from 'fs'
+import path from 'path'
 import { getCommandList } from '../commands/index.js'
 import { getProjectFileList } from './commandParser.js'
+import { getCurrentWorkDir } from './pathUtils.js'
+import { saveClipboardImage } from './clipboardUtils.js'
 
 /**
  * 输入处理器类
@@ -87,6 +91,10 @@ export class InputHandler {
         this.refreshDisplay()
         return
 
+      case '\x16': // Ctrl+V - 粘贴图片
+        await this.handlePasteImage()
+        return
+
       default:
         // 处理普通字符（支持输入法一次性输入多个字符）
         if (key.length >= 1 && key >= ' ') {
@@ -129,6 +137,43 @@ export class InputHandler {
   }
 
   /**
+   * 处理 Ctrl+V 粘贴图片
+   */
+  async handlePasteImage() {
+    try {
+      // 显示正在处理的提示
+      this.clearLine()
+      process.stdout.write(chalk.yellow('正在从剪贴板获取图片...'))
+
+      // 调用剪贴板工具保存图片
+      const imagePath = await saveClipboardImage()
+
+      // 清除提示
+      this.clearLine()
+
+      if (imagePath) {
+        // 获取图片文件名
+        const fileName = path.basename(imagePath)
+        // 将图片路径插入到输入框
+        this.inputBuffer =
+          this.inputBuffer.slice(0, this.cursorPosition) +
+          `#${fileName} ` +
+          this.inputBuffer.slice(this.cursorPosition)
+        this.cursorPosition += fileName.length + 2 // # + 文件名 + 空格
+        this.refreshDisplay()
+        process.stdout.write(chalk.green(`✓ 已粘贴图片: ${fileName}`))
+      } else {
+        this.refreshDisplay()
+        process.stdout.write(chalk.red('剪贴板中没有图片'))
+      }
+    } catch (error) {
+      this.clearLine()
+      this.refreshDisplay()
+      process.stdout.write(chalk.red(`粘贴图片失败: ${error.message}`))
+    }
+  }
+
+  /**
    * 刷新显示
    */
   refreshDisplay() {
@@ -161,11 +206,13 @@ export class InputHandler {
    * @param {string} char - 刚输入的字符
    */
   async checkAndTriggerSelector(char) {
-    // 检查是否输入了 / 或 @
+    // 检查是否输入了 /、@ 或 #
     if (char === '/' && this.shouldTriggerCommandSelector()) {
       await this.triggerCommandSelector()
     } else if (char === '@' && this.shouldTriggerFileSelector()) {
       await this.triggerFileSelector()
+    } else if (char === '#' && this.shouldTriggerImageSelector()) {
+      await this.triggerImageSelector()
     }
   }
 
@@ -187,6 +234,55 @@ export class InputHandler {
     // 条件：@ 是第一个字符，或者前面是空格
     const beforeAt = this.inputBuffer.slice(0, this.cursorPosition - 1)
     return beforeAt === '' || beforeAt.endsWith(' ')
+  }
+
+  /**
+   * 判断是否应该触发图片选择器
+   * @returns {boolean}
+   */
+  shouldTriggerImageSelector() {
+    // 条件：# 是第一个字符，或者前面是空格
+    const beforeHash = this.inputBuffer.slice(0, this.cursorPosition - 1)
+    return beforeHash === '' || beforeHash.endsWith(' ')
+  }
+
+  /**
+   * 获取图片文件列表
+   * @returns {Array} - 图片文件列表 [{name, description, path}]
+   */
+  getImageFileList() {
+    const designDir = path.join(getCurrentWorkDir(), '.front', 'design')
+    const images = []
+
+    // 如果 design 目录不存在，创建它
+    if (!fs.existsSync(designDir)) {
+      fs.mkdirSync(designDir, { recursive: true })
+      return images
+    }
+
+    // 支持的图片格式
+    const imageExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp']
+
+    try {
+      const files = fs.readdirSync(designDir)
+      for (const file of files) {
+        const ext = path.extname(file).toLowerCase()
+        if (imageExtensions.includes(ext)) {
+          const fullPath = path.join(designDir, file)
+          const stat = fs.statSync(fullPath)
+          const sizeKB = Math.round(stat.size / 1024)
+          images.push({
+            name: file,
+            description: `${ext.toUpperCase().slice(1)} - ${sizeKB}KB`,
+            path: fullPath
+          })
+        }
+      }
+    } catch (error) {
+      console.error(`读取图片目录失败: ${error.message}`)
+    }
+
+    return images
   }
 
   /**
@@ -290,6 +386,49 @@ export class InputHandler {
   }
 
   /**
+   * 触发图片选择器
+   */
+  async triggerImageSelector() {
+    this.isShowingSelector = true
+
+    // 移除刚输入的 #
+    this.inputBuffer =
+      this.inputBuffer.slice(0, this.cursorPosition - 1) +
+      this.inputBuffer.slice(this.cursorPosition)
+    this.cursorPosition--
+
+    // 暂时移除键盘监听
+    process.stdin.removeListener('data', this.handleKeyPress)
+
+    // 清除当前行
+    this.clearLine()
+
+    // 显示图片选择器
+    const imageList = this.getImageFileList()
+    const result = await this.showImageSelector(imageList)
+
+    // 恢复输入
+    this.isShowingSelector = false
+
+    if (result) {
+      // 图片：无论 Tab 还是 Enter，都填入输入框（与 @ 行为一致）
+      this.inputBuffer = `#${result.name} `
+      this.cursorPosition = this.inputBuffer.length
+    }
+
+    // 刷新显示
+    this.refreshDisplay()
+
+    // 重新启用原始模式并监听键盘事件
+    if (process.stdin.setRawMode) {
+      process.stdin.setRawMode(true)
+    }
+    process.stdin.resume()
+    process.stdin.setEncoding('utf8')
+    process.stdin.on('data', this.handleKeyPress)
+  }
+
+  /**
    * 完成输入
    */
   finishInput() {
@@ -329,6 +468,15 @@ export class InputHandler {
    */
   async showFileSelector(fileList) {
     return this.showSelector('项目文件', fileList, 'file')
+  }
+
+  /**
+   * 显示图片选择器
+   * @param {Array} imageList - 图片列表
+   * @returns {Promise<Object|null>} - 选中的图片 {name, method} 或 null
+   */
+  async showImageSelector(imageList) {
+    return this.showSelector('设计图片', imageList, 'image')
   }
 
   /**

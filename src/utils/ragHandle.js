@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import chalk from "chalk";
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import mammoth from "mammoth";
 import * as lancedb from "@lancedb/lancedb";
@@ -272,21 +273,31 @@ export async function searchLocalVector(queryText) {
 
   // 搜索 user 目录下的 lancedb
   if (fs.existsSync(userDbPath)) {
-    const db = await lancedb.connect(userDbPath);
-    const tableNames = await db.tableNames();
-    if (tableNames.includes("doc-table")) {
-      const table = await db.openTable("doc-table");
-      userResults = await table.search(vector).limit(3).toArray();
+    try {
+      const db = await lancedb.connect(userDbPath);
+      const tableNames = await db.tableNames();
+      if (tableNames.includes("doc-table")) {
+        const table = await db.openTable("doc-table");
+        userResults = await table.search(vector).limit(3).toArray();
+      }
+    } catch (error) {
+      // 数据库可能已损坏或维度不匹配，静默跳过
+      console.log(chalk.dim('提示: 用户目录向量库跳过（可能需要重建）'));
     }
   }
 
   // 搜索当前项目目录下的 lancedb
   if (fs.existsSync(currentDbPath)) {
-    const db = await lancedb.connect(currentDbPath);
-    const tableNames = await db.tableNames();
-    if (tableNames.includes("doc-table")) {
-      const table = await db.openTable("doc-table");
-      currentResults = await table.search(vector).limit(3).toArray();
+    try {
+      const db = await lancedb.connect(currentDbPath);
+      const tableNames = await db.tableNames();
+      if (tableNames.includes("doc-table")) {
+        const table = await db.openTable("doc-table");
+        currentResults = await table.search(vector).limit(3).toArray();
+      }
+    } catch (error) {
+      // 数据库可能已损坏或维度不匹配，静默跳过
+      console.log(chalk.dim('提示: 项目目录向量库跳过（可能需要重建）'));
     }
   }
 

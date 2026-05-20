@@ -1,5 +1,5 @@
 /**
- * 指令解析器 - 解析用户输入中的指令和文件引用
+ * 指令解析器 - 解析用户输入中的指令、文件引用和图片引用
  */
 import fs from 'fs'
 import path from 'path'
@@ -14,6 +14,8 @@ import { getCurrentWorkDir } from './pathUtils.js'
  *   - args: 指令参数（如果是指令）
  *   - hasFileRefs: 是否包含文件引用
  *   - fileRefs: 文件引用列表
+ *   - hasImageRefs: 是否包含图片引用
+ *   - imageRefs: 图片引用列表
  *   - cleanInput: 清理后的输入文本
  */
 export function parseInput(input) {
@@ -24,6 +26,8 @@ export function parseInput(input) {
     args: null,
     hasFileRefs: false,
     fileRefs: [],
+    hasImageRefs: false,
+    imageRefs: [],
     cleanInput: trimmedInput
   }
 
@@ -40,6 +44,13 @@ export function parseInput(input) {
   if (fileRefs.length > 0) {
     result.hasFileRefs = true
     result.fileRefs = fileRefs
+  }
+
+  // 提取图片引用
+  const imageRefs = extractImageReferences(trimmedInput)
+  if (imageRefs.length > 0) {
+    result.hasImageRefs = true
+    result.imageRefs = imageRefs
   }
 
   return result
@@ -72,6 +83,37 @@ export function extractFileReferences(input) {
   }
 
   return fileRefs
+}
+
+/**
+ * 提取输入中的图片引用
+ * @param {string} input - 用户输入
+ * @returns {Array} - 图片引用列表 [{reference, fileName, fullPath}]
+ */
+export function extractImageReferences(input) {
+  const imageRefs = []
+  // 匹配 # 开头的图片文件名（支持字母、数字、下划线、点、横杠）
+  const regex = /#([a-zA-Z0-9_\-\.]+\.(png|jpg|jpeg|gif|webp|bmp))/gi
+  let match
+
+  while ((match = regex.exec(input)) !== null) {
+    const reference = match[0] // 完整的 #xxx.png
+    const fileName = match[1]  // 文件名部分
+
+    // 图片文件存放在 .front/design/ 目录下
+    const fullPath = path.join(getCurrentWorkDir(), '.front', 'design', fileName)
+
+    // 验证文件是否存在
+    if (fs.existsSync(fullPath)) {
+      imageRefs.push({
+        reference,
+        fileName,
+        fullPath
+      })
+    }
+  }
+
+  return imageRefs
 }
 
 /**
@@ -139,6 +181,68 @@ export function processFileReferences(input, fileRefs) {
   return {
     message: cleanMessage,
     context
+  }
+}
+
+/**
+ * 处理图片引用，将图片转换为 base64 格式
+ * @param {string} input - 用户输入
+ * @param {Array} imageRefs - 图片引用列表
+ * @returns {Object} - 处理结果
+ *   - message: 处理后的消息（移除图片引用标记）
+ *   - images: 图片数据数组 [{fileName, base64, mimeType}]
+ */
+export function processImageReferences(input, imageRefs) {
+  if (!imageRefs || imageRefs.length === 0) {
+    return {
+      message: input,
+      images: []
+    }
+  }
+
+  // 读取所有图片并转换为 base64
+  const images = []
+  for (const ref of imageRefs) {
+    try {
+      const imageBuffer = fs.readFileSync(ref.fullPath)
+      const base64 = imageBuffer.toString('base64')
+
+      // 根据文件扩展名确定 MIME 类型
+      const ext = path.extname(ref.fileName).toLowerCase()
+      const mimeTypes = {
+        '.png': 'image/png',
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.gif': 'image/gif',
+        '.webp': 'image/webp',
+        '.bmp': 'image/bmp'
+      }
+      const mimeType = mimeTypes[ext] || 'image/png'
+
+      images.push({
+        fileName: ref.fileName,
+        base64,
+        mimeType
+      })
+    } catch (error) {
+      console.error(`读取图片失败: ${ref.fileName}`, error.message)
+    }
+  }
+
+  // 移除输入中的 # 引用标记，保留问题部分
+  let cleanMessage = input
+  for (const ref of imageRefs) {
+    cleanMessage = cleanMessage.replace(ref.reference, '').trim()
+  }
+
+  // 如果清理后没有内容，使用默认问题
+  if (!cleanMessage) {
+    cleanMessage = '请分析这张图片'
+  }
+
+  return {
+    message: cleanMessage,
+    images
   }
 }
 

@@ -37,6 +37,20 @@ export function createOpenAIClient() {
   })
 }
 
+// 检查消息中是否包含图片
+function hasImageContent(messages) {
+  for (const message of messages) {
+    if (Array.isArray(message.content)) {
+      for (const part of message.content) {
+        if (part.type === 'image_url') {
+          return true
+        }
+      }
+    }
+  }
+  return false
+}
+
 // 与 AI 对话的异步函数
 export async function getAIResponse(questionObj) {
   const { openai, toolResult, contextMessageList, messages, spinner } = questionObj
@@ -48,10 +62,15 @@ export async function getAIResponse(questionObj) {
       typeof item === 'string' ? { role: 'system', content: item } : item
     )
 
+    // 检查是否需要使用视觉模型
+    const allMessages = [...normalizedContext, ...messages]
+    const useVision = hasImageContent(allMessages)
+    const model = useVision ? (config.visionModel || config.model) : config.model
+
     // 调用 OpenAI API
     const completion = await openai.chat.completions.create({
-      model: config.model,
-      messages: [...normalizedContext, ...messages],
+      model,
+      messages: allMessages,
       temperature: 0.7,
       tools: transformToOpenAi(toolResult.tools)
     })

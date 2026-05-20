@@ -1,5 +1,5 @@
 /**
- * 选择器组件 - 用于显示指令列表和文件列表
+ * 选择器组件 - 用于显示指令列表、文件列表和图片列表
  * 支持键盘上下选择、Tab 确认、实时筛选
  */
 import chalk from 'chalk'
@@ -13,9 +13,10 @@ const MAX_VISIBLE_ITEMS = 10
  * @param {Object} options - 配置选项
  * @param {string} options.title - 列表标题
  * @param {Array} options.items - 列表项数组 [{name, description}]
+ * @param {string} options.type - 选择器类型 ('command', 'file', 'image')
  * @returns {Promise<Object|null>} - 返回选中项或 null（取消）
  */
-export async function showSelector({ title, items }) {
+export async function showSelector({ title, items, type = 'file' }) {
   return new Promise((resolve) => {
     // 当前选中索引
     let selectedIndex = 0
@@ -93,7 +94,7 @@ export async function showSelector({ title, items }) {
       }
 
       // 显示操作提示
-      console.log(chalk.dim('↑/↓ 选择 | Tab 确认 | Esc 取消 | 输入筛选'))
+      console.log(chalk.dim('↑/↓ 选择 | Tab/Enter 确认 | Esc 取消 | 输入筛选'))
 
       render.hasRendered = true
     }
@@ -159,11 +160,17 @@ export async function showSelector({ title, items }) {
         return
       }
 
-      // Enter 键 - 确认选择（用于直接执行）
+      // Enter 键 - 根据类型决定行为
       if (key === '\r' || key === '\n') {
         cleanup()
         if (filteredItems.length > 0) {
-          resolve({ item: filteredItems[selectedIndex], method: 'enter' })
+          if (type === 'command') {
+            // 指令：Enter 直接执行
+            resolve({ item: filteredItems[selectedIndex], method: 'enter' })
+          } else {
+            // 文件和图片：Enter 填充到输入框（与 Tab 行为一致）
+            resolve({ item: filteredItems[selectedIndex], method: 'tab' })
+          }
         } else {
           resolve(null)
         }
@@ -171,14 +178,14 @@ export async function showSelector({ title, items }) {
       }
 
       // Esc 键 - 取消
-      if (key === '') {
+      if (key === '') {
         cleanup()
         resolve(null)
         return
       }
 
       // Backspace 键 - 删除筛选字符
-      if (key === '' || key === '\b') {
+      if (key === '' || key === '\b') {
         if (filterText.length > 0) {
           filterText = filterText.slice(0, -1)
           filterItems()
@@ -228,7 +235,8 @@ export async function showSelector({ title, items }) {
 export async function showCommandSelector(commands) {
   return showSelector({
     title: '可用指令',
-    items: commands
+    items: commands,
+    type: 'command'
   })
 }
 
@@ -240,6 +248,20 @@ export async function showCommandSelector(commands) {
 export async function showFileSelector(files) {
   return showSelector({
     title: '项目文件',
-    items: files
+    items: files,
+    type: 'file'
+  })
+}
+
+/**
+ * 显示图片选择器
+ * @param {Array} images - 图片数组 [{name, description}]
+ * @returns {Promise<Object|null>} - 返回选中的图片或 null
+ */
+export async function showImageSelector(images) {
+  return showSelector({
+    title: '设计图片',
+    items: images,
+    type: 'image'
   })
 }
