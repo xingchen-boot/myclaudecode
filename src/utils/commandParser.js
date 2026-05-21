@@ -222,7 +222,8 @@ export function processImageReferences(input, imageRefs) {
       images.push({
         fileName: ref.fileName,
         base64,
-        mimeType
+        mimeType,
+        fullPath: ref.fullPath
       })
     } catch (error) {
       console.error(`读取图片失败: ${ref.fileName}`, error.message)

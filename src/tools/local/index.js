@@ -10,6 +10,8 @@ import confirm from './confirm.js';
 import select from './select.js';
 import memory_save from './memory_save.js';
 import memory_get from './memory_get.js';
+import debugger_page from './debugger_page.js';
+import diff_pic from './diff_pic.js';
 
 
 
@@ -25,6 +27,8 @@ export default function getLocalTool() {
     localClient.registerTool(select);
     localClient.registerTool(memory_save);
     localClient.registerTool(memory_get);
+    localClient.registerTool(debugger_page);
+    localClient.registerTool(diff_pic);
 
     const localTools = localClient.listTools();
     //遍历localTools形成map映射

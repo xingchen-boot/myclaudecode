@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { markCalled } from './toolState.js';
 
 export default {
     define: {
@@ -30,6 +31,8 @@ export default {
             }
 
             fs.writeFileSync(resolvedPath, content, 'utf-8');
+            // 标记write_file已被调用，供其他工具做前置条件检查
+            markCalled('write_file');
             //写入的时候额外回传了写入内容 - 为了让他AI反思
             return `文件写入成功: ${resolvedPath}\n\n写入内容:\n${content}`;
         } catch (err) {

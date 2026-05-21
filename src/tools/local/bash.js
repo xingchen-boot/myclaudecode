@@ -1,4 +1,4 @@
-import { exec } from 'child_process';
+import { exec, spawn } from 'child_process';
 import { promisify } from 'util';
 import os from 'os';
 
@@ -8,8 +8,26 @@ const getPlatform = () => {
     return os.platform() === 'win32' ? 'windows' : 'others';
 };
 
-
-
+/**
+ * 判断是否为长时间运行的命令（如开发服务器、watch 模式等）
+ * 这类命令不会自行退出，需要后台执行
+ * @param {string} command
+ * @returns {boolean}
+ */
+function isLongRunningCommand(command) {
+    const patterns = [
+        /\bnpm\s+run\s+(dev|serve|start|watch)\b/i,
+        /\byarn\s+(dev|serve|start|watch)\b/i,
+        /\bnpx\s+.*serve\b/i,
+        /\bvue-cli-service\s+serve\b/i,
+        /\bnode\s+.*--watch\b/i,
+        /\bwebpack-dev-server\b/i,
+        /\bvite\b(?!.*build)/i,
+        /\bhttp-server\b/i,
+        /\blive-server\b/i,
+    ];
+    return patterns.some(pattern => pattern.test(command));
+}
 
 export default {
     define: {
@@ -28,29 +46,33 @@ export default {
     },
 
     async handle({ command }) {
-        // 1. 获取AI命令
-
-
-        // 2. 判断系统并执行
         const platform = getPlatform();
         let finalCommand = command;
 
         if (platform === 'windows') {
-            //cmd不能执行bash，所以window下用powershell执行
             finalCommand = `chcp 65001 >nul && powershell -Command "${command}"`;
         }
 
-        // 3. 执行
-        try {
+        // 长时间运行的命令：后台执行，立即返回
+        if (isLongRunningCommand(command)) {
+            const child = spawn(finalCommand, [], {
+                shell: true,
+                detached: true,
+                stdio: 'ignore',
+            });
+            child.unref();
+            return `已在后台启动进程 (PID: ${child.pid})，命令: ${command}\n注意：进程在后台运行，不会阻塞后续操作。`;
+        }
 
-            const { stdout, stderr } = await execAsync(finalCommand, { encoding: 'utf8' });
+        // 普通命令：执行并返回结果，超时 30 秒
+        try {
+            const { stdout, stderr } = await execAsync(finalCommand, {
+                encoding: 'utf8',
+                timeout: 30000,
+            });
             return `执行成功:\n${stdout}${stderr ? '\n' + stderr : ''}`;
         } catch (error) {
             return `执行失败: ${error.message}`;
         }
     }
 };
-// const result = await a.handle({
-//     command: "ping baidu.com"
-// });
-// console.log(result);

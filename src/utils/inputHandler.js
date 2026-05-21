@@ -1,16 +1,18 @@
 /**
  * 输入处理器 - 支持 / 指令、@ 文件选择和 # 图片选择
  * 输入 /、@ 或 # 时立即显示选择列表
- * 支持输入法、光标移动、Tab/Enter 确认、Ctrl+V 粘贴图片
+ * 支持输入法、光标移动、Tab/Enter 确认
+ * 支持自动检测剪贴板图片并提示粘贴
  */
 import readline from 'readline'
 import chalk from 'chalk'
+import crypto from 'crypto'
 import fs from 'fs'
 import path from 'path'
 import { getCommandList } from '../commands/index.js'
 import { getProjectFileList } from './commandParser.js'
 import { getCurrentWorkDir } from './pathUtils.js'
-import { saveClipboardImage } from './clipboardUtils.js'
+import { saveClipboardImage, hasClipboardImage } from './clipboardUtils.js'
 
 /**
  * 输入处理器类
@@ -29,6 +31,10 @@ export class InputHandler {
     this.escBuffer = ''
     // 转义序列计时器
     this.escTimer = null
+    // 剪贴板监控定时器
+    this.clipboardMonitor = null
+    // 上次剪贴板图片的内容哈希（避免重复提示同一张图片）
+    this.lastClipboardHash = null
   }
 
   /**
@@ -57,7 +63,65 @@ export class InputHandler {
       // 监听键盘事件
       this.handleKeyPress = this.handleKeyPress.bind(this)
       process.stdin.on('data', this.handleKeyPress)
+
+      // 启动剪贴板监控（自动检测图片粘贴）
+      this.startClipboardMonitor()
     })
+  }
+
+  /**
+   * 启动剪贴板监控
+   * 定期检查剪贴板是否包含图片，如果有则自动插入
+   */
+  startClipboardMonitor() {
+    this.stopClipboardMonitor()
+    // 每3秒检查一次剪贴板（仅在输入等待期间）
+    this.clipboardMonitor = setInterval(async () => {
+      // 如果正在显示选择器，跳过检查
+      if (this.isShowingSelector) return
+
+      try {
+        const hasImage = await hasClipboardImage()
+        if (hasImage) {
+          // 保存图片到 design 目录
+          const imagePath = await saveClipboardImage()
+          if (imagePath) {
+            // 通过文件内容哈希判断是否是同一张图片
+            const fileBuffer = fs.readFileSync(imagePath)
+            const hash = crypto.createHash('md5').update(fileBuffer).digest('hex')
+            if (this.lastClipboardHash === hash) return
+            this.lastClipboardHash = hash
+
+            const fileName = path.basename(imagePath)
+
+            // 将图片引用插入输入框
+            const insertText = `#${fileName} `
+            this.inputBuffer =
+              this.inputBuffer.slice(0, this.cursorPosition) +
+              insertText +
+              this.inputBuffer.slice(this.cursorPosition)
+            this.cursorPosition += insertText.length
+
+            // 刷新显示并提示用户
+            this.refreshDisplay()
+            process.stdout.write(chalk.green(`\n✓ 检测到剪贴板图片，已插入: ${fileName}`))
+          }
+        }
+      } catch (error) {
+        // 忽略剪贴板检查错误（如 PowerShell 不可用）
+      }
+    }, 3000)
+  }
+
+  /**
+   * 停止剪贴板监控
+   */
+  stopClipboardMonitor() {
+    if (this.clipboardMonitor) {
+      clearInterval(this.clipboardMonitor)
+      this.clipboardMonitor = null
+    }
+    this.lastClipboardHash = null
   }
 
   /**
@@ -124,10 +188,6 @@ export class InputHandler {
       case '': // Backspace
       case '\b':
         this.handleBackspace()
-        return
-
-      case '\x16': // Ctrl+V - 粘贴图片
-        await this.handlePasteImage()
         return
 
       case '\x01': // Ctrl+A - 光标移到开头
@@ -212,42 +272,6 @@ export class InputHandler {
     }
   }
 
-  /**
-   * 处理 Ctrl+V 粘贴图片
-   */
-  async handlePasteImage() {
-    try {
-      // 显示正在处理的提示
-      this.clearLine()
-      process.stdout.write(chalk.yellow('正在从剪贴板获取图片...'))
-
-      // 调用剪贴板工具保存图片
-      const imagePath = await saveClipboardImage()
-
-      // 清除提示
-      this.clearLine()
-
-      if (imagePath) {
-        // 获取图片文件名
-        const fileName = path.basename(imagePath)
-        // 将图片路径插入到输入框
-        this.inputBuffer =
-          this.inputBuffer.slice(0, this.cursorPosition) +
-          `#${fileName} ` +
-          this.inputBuffer.slice(this.cursorPosition)
-        this.cursorPosition += fileName.length + 2 // # + 文件名 + 空格
-        this.refreshDisplay()
-        process.stdout.write(chalk.green(`✓ 已粘贴图片: ${fileName}`))
-      } else {
-        this.refreshDisplay()
-        process.stdout.write(chalk.red('剪贴板中没有图片'))
-      }
-    } catch (error) {
-      this.clearLine()
-      this.refreshDisplay()
-      process.stdout.write(chalk.red(`粘贴图片失败: ${error.message}`))
-    }
-  }
 
   /**
    * 计算字符串的显示宽度（中文字符占2个宽度，ASCII字符占1个宽度）
@@ -542,6 +566,7 @@ export class InputHandler {
    * 清理资源
    */
   cleanup() {
+    this.stopClipboardMonitor()
     process.stdin.removeListener('data', this.handleKeyPress)
     if (this.escTimer) {
       clearTimeout(this.escTimer)

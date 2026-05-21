@@ -8,7 +8,7 @@ import { transformToOpenAi } from '../tools/util.js'
 import { excuteTool } from '../tools/index.js'
 
 // 读取配置文件
-function loadConfig() {
+export function loadConfig() {
   const userHome = getUserHomeDir()
   const currentDir = getCurrentWorkDir()
 

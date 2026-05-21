@@ -1,11 +1,12 @@
 
-import { createOpenAIClient, getAIResponse } from '../../request/index.js';
+import { createOpenAIClient, getAIResponse, loadConfig } from '../../request/index.js';
 import { imageToBase64 } from '../../utils/fileHandle.js';
+import { hasCalled } from './toolState.js';
 import fs from "fs"
 export default {
     define: {
         name: "diff_pic",
-        description: "用于比对设计图和测试截图的区别，工具会返回文字描述的具体区别点",
+        description: "设计图与截图对比工具。使用前提：1.页面代码已开发完成 2.已通过debugger_page工具获取到截图。在以上两步完成之前禁止调用此工具。传入设计图路径和截图路径，返回UI差异描述。",
         inputSchema: {
             type: "object",
             properties: {
@@ -23,6 +24,10 @@ export default {
         }
     },
     async handle({ design, screenshot }) {
+        // 前置检查：必须先通过debugger_page获取截图
+        if (!hasCalled('debugger_page')) {
+            return '错误：还没有通过debugger_page获取截图，请先调用debugger_page获取页面截图后再进行对比。';
+        }
         const openai = createOpenAIClient();
         const designBase64 = await imageToBase64(design);
         const screenshotBase64 = await imageToBase64(screenshot);
@@ -68,8 +73,9 @@ export default {
             }
 
         ]
+        const config = loadConfig()
         let response = await openai.chat.completions.create({
-            model: 'qwen3.6-plus',
+            model: config.visionModel || config.model,
             messages: message,
         });
         const result = response.choices[0].message

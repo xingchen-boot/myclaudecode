@@ -28,6 +28,7 @@
     "minimatch": "^10.2.5",
     "openai": "^6.36.0",
     "ora": "^9.4.0",
-    "picomatch": "^4.0.4"
+    "picomatch": "^4.0.4",
+    "playwright": "^1.60.0"
   }
 }

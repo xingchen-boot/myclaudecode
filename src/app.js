@@ -171,8 +171,9 @@ async function promptUser() {
       }
       content.push({ type: 'text', text: textContent })
 
-      // 添加图片内容
+      // 添加图片内容，并附带图片文件路径信息
       for (const image of imageContents) {
+        content.push({ type: 'text', text: `设计图路径: ${image.fullPath}` })
         content.push({
           type: 'image_url',
           image_url: {
@@ -237,7 +238,7 @@ welcomeLog()
 
 // 显示使用提示
 console.log(chalk.dim('提示：输入 / 后按 Tab 查看指令列表，输入 @ 后按 Tab 查看文件列表'))
-console.log(chalk.dim('      输入 # 后按 Tab 查看图片列表，Ctrl+V 粘贴剪贴板图片'))
+console.log(chalk.dim('      输入 # 后按 Tab 查看图片列表，复制图片后自动检测并插入'))
 console.log('')
 
 // 启动对话
