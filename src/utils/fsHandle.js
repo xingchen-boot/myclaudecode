@@ -1,41 +1,11 @@
-import fs from 'fs'
-import path from 'path'
-import os from 'os'
+import { syncSession } from './sessionStore.js'
 
 /**
- * 将JSON写入到用户目录下的.front/history文件夹中
- * @param {object} data - 要写入的JSON数据
+ * 把当前对话追加到会话树
+ * 同一次启动续写同一个文件，已有节点不覆盖，放弃的分支不删除
+ * @param {Array} data - 当前这条链上的消息
+ * @returns {string}
  */
 export function writeHistoryToFrontFile(data) {
-    const jsonData = JSON.stringify(data);
-    try {
-        // 获取用户目录
-        const userDir = os.homedir()
-
-        // 构建 .front/history 目录路径
-        const frontHistoryDir = path.join(userDir, '.front', 'history')
-
-        // 获取当前项目所在目录的名称作为项目文件夹名
-        const projectDir = process.cwd()
-        const projectName = path.basename(projectDir)
-
-        // 构建项目具体文件夹路径
-        const projectHistoryDir = path.join(frontHistoryDir, projectName)
-
-        // 递归创建目录（如果不存在）
-        fs.mkdirSync(projectHistoryDir, { recursive: true })
-
-        // 生成文件名（使用时间戳避免覆盖）
-        const timestamp = Date.now()
-        const fileName = `${timestamp}.json`
-        const filePath = path.join(projectHistoryDir, fileName)
-
-        // 写入JSON文件
-        fs.writeFileSync(filePath, jsonData, 'utf-8')
-
-        return filePath
-    } catch (error) {
-        console.error('写入history文件失败:', error)
-        throw error
-    }
+    return syncSession(data)
 }
