@@ -3,7 +3,6 @@ import { join, dirname, relative } from 'path'
 import { fileURLToPath } from 'url'
 import os from 'os'
 import picomatch from 'picomatch'
-import { getNowMemory } from './memoryUtils.js'
 
 // 获取当前文件的目录路径
 const __filename = fileURLToPath(import.meta.url)
@@ -36,10 +35,6 @@ export function readSystem() {
  * @returns {string} 替换变量后的用户上下文内容
  */
 export function getUserContext() {
-    // 读取 userContext.md 模板
-    const templatePath = join(__dirname, '../docs/userContext.md')
-    let content = readFileSync(templatePath, 'utf-8')
-
     // 用户 home 目录下的 .front/.front.md
     const userFrontPath = join(os.homedir(), '.front', '.front.md')
     // 当前工作目录下的 .front.md
@@ -61,18 +56,50 @@ export function getUserContext() {
         // 文件不存在，保持空字符串
     }
 
-    // 获取记忆内容
-    const { projectMemory, userMemory } = getNowMemory()
+    return formatUserContext({
+        userContent,
+        projectContent
+    })
+}
 
-    // 替换模板变量
-    content = content.replace('${userPath}', userFrontPath)
-    content = content.replace('${userContent}', userContent)
-    content = content.replace('${projectPath}', projectFrontPath)
-    content = content.replace('${projectContent}', projectContent)
-    content = content.replace(/\${userMemory}/g, userMemory)
-    content = content.replace(/\${projectMemory}/g, projectMemory)
+/**
+ * 拼出本轮要参考的用户要求。记忆不放进这里，需要时再调用 memory_get
+ * @param {{ userContent?: string, projectContent?: string }} parts
+ * @returns {string}
+ */
+export function formatUserContext(parts) {
+    const userContent = String(parts.userContent || '').trim()
+    const projectContent = String(parts.projectContent || '').trim()
+    const sections = []
 
-    return content
+    if (userContent) {
+        sections.push(`用户要求：\n${userContent}`)
+    }
+    if (projectContent) {
+        sections.push(`项目要求：\n${projectContent}`)
+    }
+
+    return sections.join('\n\n')
+}
+
+/**
+ * 组装一轮请求的固定上下文。空的用户说明和空的检索结果不占用一条消息
+ * @param {{ systemContent: string, skillContent: string, ragContent?: string }} input
+ * @returns {Array<{ role: string, content: string }>}
+ */
+export function buildTurnContext(input) {
+    const contextMessages = [{ role: 'system', content: input.systemContent }]
+    const userContext = getUserContext()
+    if (userContext) {
+        contextMessages.push({ role: 'user', content: userContext })
+    }
+    if (input.skillContent && input.skillContent.trim()) {
+        contextMessages.push({ role: 'user', content: input.skillContent })
+    }
+    if (input.ragContent && input.ragContent.trim()) {
+        contextMessages.push({ role: 'user', content: input.ragContent })
+    }
+    return contextMessages
 }
 
 /**
@@ -250,28 +277,35 @@ function extractSkillName(header) {
  * 获取所有 skill 的头部信息并填充模板
  * @returns {string} 替换模板变量后的内容
  */
-export function getSkillHeaders() {
-    // 用户 home 目录下的 .front/skills/
-    const userSkillsDir = join(os.homedir(), '.front', 'skills')
-    // 当前工作目录下的 .front/skills/
-    const projectSkillsDir = join(process.cwd(), '.front', 'skills')
-
-    // 收集所有 skill 头部和文件路径
-    const allSkills = [
-        ...collectSkillHeaders(userSkillsDir),
-        ...collectSkillHeaders(projectSkillsDir)
+/**
+ * skill 文件允许出现的目录
+ * 程序自带、用户目录、当前项目，三处都算
+ * @returns {string[]}
+ */
+export function getSkillDirectories() {
+    return [
+        join(__dirname, '../docs/skills'),
+        join(os.homedir(), '.front', 'skills'),
+        join(process.cwd(), '.front', 'skills')
     ]
+}
 
-    // 拼接所有头部内容，附带 skill 名称和文件地址
-    const skillContent = allSkills.map(({ header, filePath }) => {
-        const skillName = extractSkillName(header)
-        return `${header}\n${skillName}的skill文件地址: ${filePath}`
-    }).join('\n\n')
+export function getSkillHeaders() {
+    const byName = new Map()
 
-    // 读取模板文件并替换变量
-    const templatePath = join(__dirname, '../docs/skillTemplate.md')
-    let template = readFileSync(templatePath, 'utf-8')
-    template = template.replace('${skillcontent}', skillContent)
+    for (const skillsDir of getSkillDirectories()) {
+        for (const skill of collectSkillHeaders(skillsDir)) {
+            const skillName = extractSkillName(skill.header)
+            const descriptionMatch = skill.header.match(/^description:\s*(.+)$/m)
+            const description = descriptionMatch ? descriptionMatch[1].trim() : ''
+            // 同名时后面的目录覆盖前面的，只留一份
+            byName.set(skillName, `${skillName}: ${description}\n路径: ${skillName}/SKILL.md`)
+        }
+    }
 
-    return template
+    if (byName.size === 0) {
+        return ''
+    }
+
+    return `需要正文时用 skill 工具按路径读取。\n${[...byName.values()].join('\n')}`
 }
