@@ -6,9 +6,6 @@
  */
 import ora from 'ora'
 import chalk from 'chalk'
-import fs from 'fs'
-import path from 'path'
-import { fileURLToPath } from 'url'
 import { createOpenAIClient, getAIResponse } from "./request/index.js"
 import logger from "./utils/logger.js"
 import { welcomeLog } from "./utils/init.js"
@@ -16,15 +13,25 @@ import { writeHistoryToFrontFile } from "./utils/fsHandle.js"
 import { createInputHandler } from "./utils/inputHandler.js"
 import { parseInput, processFileReferences, processImageReferences } from "./utils/commandParser.js"
 import { executeCommand, loadCustomCommands } from "./commands/index.js"
-import { readSystem, getUserContext, readRules, matchRules, getSkillHeaders } from './utils/contextRead.js'
+import { readSystem, readRules, matchRules, getSkillHeaders, buildTurnContext } from './utils/contextRead.js'
 import toolResult from "./tools/index.js"
 import { searchLocalVector } from "./utils/ragHandle.js"
+import { markUntrustedData } from "./utils/untrustedText.js"
+import { loadLatestSession, resetActiveSessionFile } from "./utils/sessionStore.js"
+import { clearDangerApproval } from "./tools/local/dangerApproval.js"
+import { resetWorkflowForTurn } from "./tools/local/workflowState.js"
 
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
-
-// 读取 RAG 模板
-const ragTemplate = fs.readFileSync(path.join(__dirname, './docs/ragTemplate.md'), 'utf-8')
+/**
+ * 检索片段按资料包起来。没有结果时返回空字符串
+ * @param {string[]} snippets
+ * @returns {string}
+ */
+function ragContentFromSnippets(snippets) {
+  if (!Array.isArray(snippets) || snippets.length === 0) {
+    return ''
+  }
+  return markUntrustedData('检索到的资料', snippets.join('\n'))
+}
 
 // 创建 OpenAI 客户端实例
 const openai = createOpenAIClient()
@@ -36,10 +43,9 @@ loadCustomCommands()
 // 创建输入处理器
 const inputHandler = createInputHandler()
 
-// 项目启动时读取上下文
+// 系统提示和 skill 摘要在启动时读取。用户要求和记忆每次提问前再读
 const systemMessage = { role: 'system', content: readSystem() }
-const userContextMessage = { role: 'user', content: getUserContext() }
-const userSkillMessage = { role: 'user', content: getSkillHeaders() }
+const skillMessage = { role: 'user', content: getSkillHeaders() }
 
 // 对话历史记录
 const messages = []
@@ -49,6 +55,7 @@ const messages = []
  */
 function clearMessages() {
   messages.length = 0
+  resetActiveSessionFile()
 }
 
 /**
@@ -73,8 +80,12 @@ async function promptUser() {
       return
     }
 
+    // 新的一条用户消息，上一轮的危险操作确认作废
+    clearDangerApproval()
+
     // 解析输入
     const parsed = parseInput(input)
+    resetWorkflowForTurn(input, Boolean(parsed.hasImageRefs))
 
     // 如果是指令，执行指令
     if (parsed.isCommand) {
@@ -102,14 +113,12 @@ async function promptUser() {
         console.log('')
         const spinner = ora('AI 正在思考...').start()
 
-        // 搜索本地向量库，使用模板格式化 RAG 内容作为上下文
         const ragResults = await searchLocalVector(parsed.args || '')
-        const ragMessage = { role: 'user', content: '' }
-        if (ragResults.length > 0) {
-          ragMessage.content = ragTemplate.replace('${ragContent}', ragResults.join('\n'))
-        }
-
-        const contextList = [systemMessage, userContextMessage, userSkillMessage, ragMessage]
+        const contextList = buildTurnContext({
+          systemContent: systemMessage.content,
+          skillContent: skillMessage.content,
+          ragContent: ragContentFromSnippets(ragResults)
+        })
 
         const nowMessage = await getAIResponse({
           openai,
@@ -199,14 +208,12 @@ async function promptUser() {
       : 'AI 正在思考...'
     const spinner = ora(spinnerText).start()
 
-    // 搜索本地向量库，使用模板格式化 RAG 内容作为上下文
     const ragTexts = await searchLocalVector(processedInput)
-    const ragMessage = { role: 'user', content: '' }
-    if (ragTexts.length > 0) {
-      ragMessage.content = ragTemplate.replace('${ragContent}', ragTexts.join('\n'))
-    }
-
-    const contextList = [systemMessage, userContextMessage, userSkillMessage, ragMessage]
+    const contextList = buildTurnContext({
+      systemContent: systemMessage.content,
+      skillContent: skillMessage.content,
+      ragContent: ragContentFromSnippets(ragTexts)
+    })
 
     const nowMessage = await getAIResponse({
       openai,
@@ -233,16 +240,30 @@ async function promptUser() {
   }
 }
 
-// 显示欢迎信息
-welcomeLog()
+async function startFrontCode() {
+  welcomeLog()
 
-// 显示使用提示
-console.log(chalk.dim('提示：输入 / 后按 Tab 查看指令列表，输入 @ 后按 Tab 查看文件列表'))
-console.log(chalk.dim('      输入 # 后按 Tab 查看图片列表，复制图片后自动检测并插入'))
-console.log('')
+  console.log(chalk.dim('提示：输入 / 后按 Tab 查看指令列表，输入 @ 后按 Tab 查看文件列表'))
+  console.log(chalk.dim('      输入 # 后按 Tab 查看图片列表，复制图片后自动检测并插入'))
 
-// 启动对话
-promptUser()
+  const mcpFailures = await toolResult.mcpReady
+  if (Array.isArray(mcpFailures) && mcpFailures.length > 0) {
+    for (const failure of mcpFailures) {
+      console.log(chalk.yellow(`MCP 未连接：${failure.name}（${failure.message}）`))
+    }
+  }
+
+  const restoredMessages = loadLatestSession()
+  if (restoredMessages.length > 0) {
+    messages.push(...restoredMessages)
+    console.log(chalk.dim(`已恢复上次对话，共 ${restoredMessages.length} 条消息。/undo 回退，/redo 回到放弃的分支，/clear 清空。`))
+  }
+  console.log('')
+
+  promptUser()
+}
+
+startFrontCode()
 
 // 处理程序退出
 process.on('exit', () => {

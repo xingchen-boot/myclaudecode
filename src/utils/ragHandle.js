@@ -6,8 +6,36 @@ import mammoth from "mammoth";
 import * as lancedb from "@lancedb/lancedb";
 import { getUserHomeDir, getCurrentWorkDir } from "./pathUtils.js";
 
-const ZHIPU_API_KEY = "3850ef9e7d1d460dba93cf8248be8df3.XilCiKimg6HkB58e";
 const ALLOWED_EXTENSIONS = ['.md', '.txt', '.docx'];
+let embeddingKeyWarningShown = false;
+
+/**
+ * 从项目或用户配置读取向量接口密钥
+ * 配置项名是 embeddingApiKey
+ * @returns {string}
+ */
+function readEmbeddingApiKey() {
+  const configPaths = [
+    path.join(getCurrentWorkDir(), '.front', 'settings.json'),
+    path.join(getUserHomeDir(), '.front', 'settings.json'),
+  ];
+
+  for (const configPath of configPaths) {
+    try {
+      if (!fs.existsSync(configPath)) {
+        continue;
+      }
+      const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+      if (typeof config.embeddingApiKey === 'string' && config.embeddingApiKey.trim()) {
+        return config.embeddingApiKey.trim();
+      }
+    } catch (error) {
+      // 配置损坏时跳过，检索会返回空结果
+    }
+  }
+
+  return '';
+}
 // 获取到目录下的所有文件，比如我们这样调用它 getFilesFromDir("user/.front/doc")
 //就会获取到user目录下，.front下doc里的所有文件组成的数组
 //比如
@@ -56,6 +84,14 @@ export async function readFileContent(filePaths) {
 // 智谱 Embedding-3 向量化接口
 export async function getEmbeddings(text) {
   if (!text || typeof text !== "string") return null;
+  const embeddingApiKey = readEmbeddingApiKey();
+  if (!embeddingApiKey) {
+    if (!embeddingKeyWarningShown) {
+      embeddingKeyWarningShown = true;
+      console.error('未配置 embeddingApiKey，跳过向量检索。请写到 .front/settings.json');
+    }
+    return null;
+  }
   const safeText = text.trim().slice(0, 8000); // 智谱上下文窗口8K
 
   try {
@@ -63,7 +99,7 @@ export async function getEmbeddings(text) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${ZHIPU_API_KEY}`,
+        Authorization: `Bearer ${embeddingApiKey}`,
       },
       body: JSON.stringify({
         model: "embedding-3",
@@ -113,9 +149,10 @@ export async function getAllRagFile() {
  */
 export async function filesToEmbedding(fileArr) {
   if (!Array.isArray(fileArr) || fileArr.length === 0) return [];
+  // 按段落规模切分，保留路径，避免 40 字碎片无法表达一个完整说明
   const splitter = new RecursiveCharacterTextSplitter({
-    chunkSize: 40,
-    chunkOverlap: 20,
+    chunkSize: 800,
+    chunkOverlap: 120,
   });
   // 并行切割所有文档内容
   //会得到一个二维数组，
@@ -154,8 +191,9 @@ export async function filesToEmbedding(fileArr) {
  * 将向量结果数组存储到 LanceDB
  * @param {'user'|'current'} type - 存储类型，user 表示用户目录，current 表示当前项目目录
  * @param {Array<{vector: number[], text: string, path: string}>} vectors - 向量结果数组
+ * @param {boolean} replaceAll - 为 true 时先删掉整张表再写入，避免重复执行把旧分块叠进去
  */
-export async function storeIn(type, vectors) {
+export async function storeIn(type, vectors, replaceAll = false) {
   if (!Array.isArray(vectors) || vectors.length === 0) return;
   //根据是user目录下的文档，还是当前项目下的文档，连接到不同位置
   //核心就是当前项目下的存到当前项目下的.front下的langce-db文件夹
@@ -178,14 +216,19 @@ export async function storeIn(type, vectors) {
   const tableNames = await db.tableNames();
   const tableName = "doc-table"; //目标要存的table
   //检测是否table已经存在
-  if (tableNames.includes(tableName)) {
-    //存在则加入
-    const table = await db.openTable(tableName);
-    await table.add(vectors, { mode: "append" });
-  } else {
-    //不存在则创建
+  if (tableNames.includes(tableName) && replaceAll) {
+    await db.dropTable(tableName);
     await db.createTable(tableName, vectors);
+    return;
   }
+
+  if (tableNames.includes(tableName)) {
+    const table = await db.openTable(tableName);
+    await table.add(vectors);
+    return;
+  }
+
+  await db.createTable(tableName, vectors);
 }
 
 /**
@@ -226,7 +269,7 @@ export async function searchFileAndStoreIn(fileName) {
   for (const target of targets) {
     const typeVectors = vectors.filter((v) => v.path === target.path);
     if (typeVectors.length > 0) {
-      await storeIn(target.type, typeVectors);
+      await replaceVectorsForFile(target.type, target.path, typeVectors);
     }
   }
 }
@@ -241,13 +284,45 @@ export async function storeAllFilesIn() {
   if (userDocArr.length > 0) {
     //把user的内容转化为向量，然后存入
     const userVectors = await filesToEmbedding(userDocArr);
-    await storeIn("user", userVectors);
+    await storeIn("user", userVectors, true);
   }
 
   if (currentDirDocArr.length > 0) {
     const currentVectors = await filesToEmbedding(currentDirDocArr);
-    await storeIn("current", currentVectors);
+    await storeIn("current", currentVectors, true);
   }
+}
+
+/**
+ * 替换某一个文件的向量，先删掉该路径的旧分块再写入
+ * @param {'user'|'current'} type
+ * @param {string} filePath
+ * @param {Array} vectors
+ */
+async function replaceVectorsForFile(type, filePath, vectors) {
+  const dbPath = type === 'user'
+    ? path.join(getUserHomeDir(), '.front', 'langcedb-data')
+    : path.join(getCurrentWorkDir(), '.front', 'langcedb-data');
+  if (!fs.existsSync(dbPath)) {
+    fs.mkdirSync(dbPath, { recursive: true });
+  }
+
+  const db = await lancedb.connect(dbPath);
+  const tableName = 'doc-table';
+  const tableNames = await db.tableNames();
+  if (!tableNames.includes(tableName)) {
+    await db.createTable(tableName, vectors);
+    return;
+  }
+
+  const table = await db.openTable(tableName);
+  const escapedPath = filePath.replace(/'/g, "''");
+  try {
+    await table.delete(`path = '${escapedPath}'`);
+  } catch (error) {
+    // 该文件还没有旧分块时，删除条件不会影响后续写入
+  }
+  await table.add(vectors);
 }
 
 /**
@@ -301,5 +376,8 @@ export async function searchLocalVector(queryText) {
     }
   }
 
-  return [...userResults, ...currentResults].map((r) => r.text);
+  return [...userResults, ...currentResults].map((item) => {
+    const sourcePath = item.path || '未知来源';
+    return `来源: ${sourcePath}\n${item.text}`;
+  });
 }

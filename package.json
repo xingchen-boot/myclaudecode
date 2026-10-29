@@ -4,7 +4,8 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node src/eval/gradeCheck.js && node src/eval/sessionCheck.js && node src/eval/workflowCheck.js && node src/eval/apiRetryCheck.js && node src/eval/compactCheck.js && node src/eval/promptCheck.js && node src/eval/contextCheck.js && node src/eval/configRootCheck.js && node src/eval/leanContextCheck.js && node src/eval/untrustedCheck.js",
+    "eval": "node src/eval/cli.js"
   },
   "bin": {
     "front": "./src/app.js"
@@ -30,5 +31,8 @@
     "ora": "^9.4.0",
     "picomatch": "^4.0.4",
     "playwright": "^1.60.0"
+  },
+  "optionalDependencies": {
+    "@lancedb/lancedb-win32-x64-msvc": "^0.27.2"
   }
 }

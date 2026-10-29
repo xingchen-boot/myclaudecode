@@ -17,6 +17,8 @@ import { storeAllFilesIn, searchFileAndStoreIn } from '../utils/ragHandle.js'
 import { getMemoryContent } from '../utils/memoryUtils.js'
 import { createOpenAIClient, getAIResponse } from '../request/index.js'
 import toolResult from '../tools/index.js'
+import { loadLatestSession, undoActiveSession, redoActiveSession } from '../utils/sessionStore.js'
+import { readRecentTraceRecords, summarizeTraceRecords } from '../utils/toolTrace.js'
 
 /**
  * 指令列表
@@ -76,6 +78,30 @@ export const commands = {
     name: '/memory',
     description: '生成记忆 - 调用大模型分析上下文并写入记忆文件',
     handler: generateMemory,
+    type: 'blocking'
+  },
+  '/resume': {
+    name: '/resume',
+    description: '恢复最近一次保存的对话',
+    handler: resumeSession,
+    type: 'blocking'
+  },
+  '/undo': {
+    name: '/undo',
+    description: '回退到上一条用户消息之前，放弃的记录仍保留',
+    handler: undoSession,
+    type: 'blocking'
+  },
+  '/redo': {
+    name: '/redo',
+    description: '回到刚才放弃的那一支，写过新消息后不能再 redo',
+    handler: redoSession,
+    type: 'blocking'
+  },
+  '/stats': {
+    name: '/stats',
+    description: '查看工具调用次数、成功率和被拦截次数',
+    handler: showToolStats,
     type: 'blocking'
   },
 
@@ -318,7 +344,11 @@ function showHelp() {
     { cmd: '/model', desc: '查看当前使用的模型' },
     { cmd: '/config', desc: '查看配置信息' },
     { cmd: '/vector [file]', desc: '将所有本地文档或指定文件向量化并存入数据库' },
-    { cmd: '/memory', desc: '生成记忆 - 调用大模型分析上下文并写入记忆文件' }
+    { cmd: '/memory', desc: '生成记忆 - 调用大模型分析上下文并写入记忆文件' },
+    { cmd: '/resume', desc: '恢复最近一次保存的对话' },
+    { cmd: '/undo', desc: '回退到上一条用户消息之前，旧记录不删除' },
+    { cmd: '/redo', desc: '回到刚才放弃的那一支' },
+    { cmd: '/stats', desc: '查看工具调用成功率、失败和拦截次数' }
   ]
 
   for (const item of helpItems) {
@@ -367,10 +397,11 @@ function showHistory(args, context) {
   console.log(chalk.cyan('─'.repeat(40)))
 
   for (const msg of messages) {
-    const role = msg.role === 'user' ? chalk.green('问：') : chalk.blue('AI：')
-    const content = msg.content.length > 100
-      ? msg.content.substring(0, 100) + '...'
-      : msg.content
+    const role = msg.role === 'user' ? chalk.green('问：') : msg.role === 'tool' ? chalk.yellow('工具：') : chalk.blue('AI：')
+    const rawContent = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content ?? '')
+    const content = rawContent.length > 100
+      ? rawContent.substring(0, 100) + '...'
+      : rawContent
     console.log(role + ' ' + content)
   }
 
@@ -471,6 +502,105 @@ function showConfig() {
     console.log(chalk.red(`读取配置失败: ${error.message}`))
   }
 
+  return true
+}
+
+/**
+ * 汇总当前项目最近的工具调用记录
+ * @returns {boolean}
+ */
+function showToolStats() {
+  const records = readRecentTraceRecords()
+  const summary = summarizeTraceRecords(records)
+
+  console.log('')
+  console.log(chalk.cyan.bold('工具调用统计：'))
+  console.log(chalk.cyan('─'.repeat(40)))
+
+  if (summary.totalCount === 0) {
+    console.log(chalk.yellow('暂无工具调用记录'))
+    console.log(chalk.cyan('─'.repeat(40)))
+    console.log('')
+    return true
+  }
+
+  console.log(chalk.green('调用次数：') + chalk.white(String(summary.totalCount)))
+  console.log(chalk.green('成功：    ') + chalk.white(String(summary.successCount)))
+  console.log(chalk.green('失败：    ') + chalk.white(String(summary.failureCount)))
+  console.log(chalk.green('拦截：    ') + chalk.white(String(summary.blockedCount)))
+  console.log(chalk.green('成功率：  ') + chalk.white(`${summary.successRate}%`))
+  console.log(chalk.cyan('─'.repeat(40)))
+  console.log(chalk.dim('统计当前项目最近 2000 条记录'))
+  console.log('')
+  return true
+}
+
+/**
+ * 用最近一次落盘的会话替换当前对话
+ * @param {string} args - 参数
+ * @param {Object} context - 上下文
+ * @returns {boolean}
+ */
+function resumeSession(args, context) {
+  const restoredMessages = loadLatestSession()
+
+  if (!context.messages) {
+    console.log(chalk.yellow('无法恢复对话'))
+    return true
+  }
+
+  if (restoredMessages.length === 0) {
+    console.log(chalk.yellow('没有可恢复的历史对话'))
+    return true
+  }
+
+  // 直接换成叶指针上的那条链，不能先清空，否则会把刚读到的指针丢掉
+  context.messages.splice(0, context.messages.length, ...restoredMessages)
+  console.log(chalk.green(`✓ 已恢复最近一次对话，共 ${restoredMessages.length} 条消息`))
+  return true
+}
+
+/**
+ * 回退当前会话的叶指针
+ * @param {string} args
+ * @param {Object} context
+ * @returns {boolean}
+ */
+function undoSession(args, context) {
+  if (!context.messages) {
+    console.log(chalk.yellow('无法回退对话'))
+    return true
+  }
+
+  const result = undoActiveSession(context.messages)
+  if (!result.undone) {
+    console.log(chalk.yellow('没有可回退的用户消息'))
+    return true
+  }
+
+  console.log(chalk.green(`✓ 已回退 ${result.removedCount} 条消息，当前还剩 ${result.remainingCount} 条。放弃的记录仍在会话文件里`))
+  return true
+}
+
+/**
+ * 把叶指针移回刚才离开的分支
+ * @param {string} args
+ * @param {Object} context
+ * @returns {boolean}
+ */
+function redoSession(args, context) {
+  if (!context.messages) {
+    console.log(chalk.yellow('无法恢复刚才的分支'))
+    return true
+  }
+
+  const result = redoActiveSession(context.messages)
+  if (!result.redone) {
+    console.log(chalk.yellow('没有可恢复的分支。写过新消息之后不能再 redo'))
+    return true
+  }
+
+  console.log(chalk.green(`✓ 已回到刚才放弃的分支，共 ${result.remainingCount} 条消息`))
   return true
 }
 

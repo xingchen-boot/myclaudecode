@@ -3,6 +3,23 @@ import path from 'path';
 import os from 'os';
 import { fileURLToPath } from 'url';
 
+// 单份记忆写回和放进对话时的长度上限，超出后丢掉较早的内容
+export const MAX_MEMORY_LENGTH = 6000
+
+/**
+ * 对话上下文里只保留记忆末尾，避免越积越长占满上下文
+ * @param {string} content - 原始记忆
+ * @returns {string}
+ */
+export function limitMemoryForContext(content) {
+    if (!content || content.length <= MAX_MEMORY_LENGTH) {
+        return content || ''
+    }
+
+    const omittedLength = content.length - MAX_MEMORY_LENGTH
+    return `（较早记忆已省略 ${omittedLength} 字。更新记忆时请压缩到 ${MAX_MEMORY_LENGTH} 字以内，保留项目特点、用户偏好和最近开发记录）\n${content.slice(-MAX_MEMORY_LENGTH)}`
+}
+
 /**
  * 获取当前项目和用户目录下的 memory.md 内容并合并，文件不存在则创建空文件
  * @returns {{ projectMemory: string, userMemory: string }} 合并后的记忆对象
@@ -58,31 +75,22 @@ export function getHistory(maxCount = 50) {
         return [];
     }
 
-    const result = [];
-    // 前面已经根据文件的修改/创建时间进行了排序了，我们只需要直接按顺序遍历就行
-    // 逐个读取文件，直到收集够 maxCount 条或文件读完
+    // 每个历史文件都是当时的完整会话，只读最新一份，再取末尾最近的若干条
     for (const file of files) {
         const filePath = path.join(projectHistoryDir, file);
         try {
-            //读取出记录
             const content = fs.readFileSync(filePath, 'utf-8');
             const records = JSON.parse(content);
-
-            if (Array.isArray(records)) {
-                result.push(...records);
-                // 如果已经超过 maxCount，截取后返回
-                if (result.length > maxCount) {
-                    return result.slice(0, maxCount);
-                }
+            if (!Array.isArray(records)) {
+                continue;
             }
+            return records.slice(-maxCount);
         } catch (error) {
             console.error(`读取历史记录文件失败: ${filePath}`, error);
-            continue;
         }
     }
 
-    // 文件读完也没满 maxCount，返回已有条数
-    return result;
+    return [];
 }
 
 /**
@@ -123,8 +131,8 @@ export function getMemoryContent() {
     const { projectContext, userContext } = getContext();
     const history = getHistory();
 
-    template = template.replace(/\$\{projectMeory\}/g, projectMemory);
-    template = template.replace(/\$\{userMeory\}/g, userMemory);
+    template = template.replace(/\$\{projectMeory\}/g, limitMemoryForContext(projectMemory));
+    template = template.replace(/\$\{userMeory\}/g, limitMemoryForContext(userMemory));
     template = template.replace(/\$\{projectMd\}/g, projectContext);
     template = template.replace(/\$\{userMd\}/g, userContext);
     template = template.replace(/\$\{record\}/g, JSON.stringify(history, null, 2));
