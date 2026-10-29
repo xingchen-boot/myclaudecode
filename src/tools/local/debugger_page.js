@@ -6,7 +6,7 @@ import { hasCalled, markCalled } from './toolState.js';
 export default {
     define: {
         name: "debugger_page",
-        description: "浏览器调试工具。当用户说'要'、'看看效果'、'启动试试'、'调试'时，必须调用此工具而不是bash。自动打开浏览器加载指定页面，检测控制台是否有报错，无报错则返回截图路径。禁止用bash启动开发服务器来代替此工具。",
+        description: "打开浏览器检查页面控制台和截图。复杂需求里用户要求看效果时用它，不要用 bash 启动服务器。简单需求不要调用。",
         inputSchema: {
             type: "object",
             properties: {
@@ -20,13 +20,15 @@ export default {
     },
     async handle({ url }) {
         // 前置检查：必须先写入代码才能调试
-        if (!hasCalled('write_file')) {
-            return '错误：还没有通过write_file写入任何代码，不能进行调试。请先写入代码再调用此工具。';
+        if (!hasCalled('write_file') && !hasCalled('edit_file')) {
+            return '错误：还没有通过 write_file 或 edit_file 写入任何代码，不能进行调试。请先写入代码再调用此工具。';
         }
         await launchBrowserForCapture(url);
         const result = await captureRunningBrowser()
-        // 标记debugger_page已被调用，供diff_pic做前置条件检查
-        markCalled('debugger_page');
+        // 只有没有控制台错误时，才算完成调试，避免带着报错去对比设计图
+        if (result.success) {
+            markCalled('debugger_page');
+        }
         return `测试结果如下：${JSON.stringify(result)}`
     }
 };

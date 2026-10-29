@@ -1,7 +1,8 @@
 
-import { createOpenAIClient, getAIResponse, loadConfig } from '../../request/index.js';
+import { createOpenAIClient, loadConfig } from '../../request/index.js';
 import { imageToBase64 } from '../../utils/fileHandle.js';
 import { hasCalled } from './toolState.js';
+import { resolveInsideWorkDir } from '../../utils/pathUtils.js';
 import fs from "fs"
 export default {
     define: {
@@ -28,9 +29,17 @@ export default {
         if (!hasCalled('debugger_page')) {
             return '错误：还没有通过debugger_page获取截图，请先调用debugger_page获取页面截图后再进行对比。';
         }
+        const designPathCheck = resolveInsideWorkDir(design);
+        if (!designPathCheck.ok) {
+            return designPathCheck.message;
+        }
+        const screenshotPathCheck = resolveInsideWorkDir(screenshot);
+        if (!screenshotPathCheck.ok) {
+            return screenshotPathCheck.message;
+        }
         const openai = createOpenAIClient();
-        const designBase64 = await imageToBase64(design);
-        const screenshotBase64 = await imageToBase64(screenshot);
+        const designBase64 = await imageToBase64(designPathCheck.resolvedPath);
+        const screenshotBase64 = await imageToBase64(screenshotPathCheck.resolvedPath);
         const message = [
             {
                 role: "user",

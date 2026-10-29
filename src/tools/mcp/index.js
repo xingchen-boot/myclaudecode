@@ -46,6 +46,7 @@ export function getMcpConfig() {
  */
 export async function linkMcpAndListTool(targetList, targetMap) {
     const mcpList = getMcpConfig()
+    const connectionFailures = []
     //映射工具名和客户端的
     // const mcpNameMapClient = {}
     //工具列表
@@ -85,6 +86,10 @@ export async function linkMcpAndListTool(targetList, targetMap) {
 
             // 如果不支持的类型，跳过
             if (!transport) {
+                connectionFailures.push({
+                    name,
+                    message: `不支持的连接类型 ${type || '空'}`
+                })
                 continue
             }
 
@@ -105,9 +110,13 @@ export async function linkMcpAndListTool(targetList, targetMap) {
             })
 
         } catch (error) {
-            // 单个服务连接失败不中断，继续连接下一个
+            connectionFailures.push({
+                name: mcpServer.name || '未命名服务',
+                message: error.message || String(error)
+            })
         }
     }
 
+    return connectionFailures
 }
 

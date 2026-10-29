@@ -2,6 +2,8 @@ export default class LocalClient {
     constructor() {
         //准备一个tools的map，用来储存所有的本地工具
         this.tools = new Map();
+        // 用来和 MCP 客户端区分，本地工具不走 MCP 超时
+        this.isLocalClient = true;
     }
     //调用该方法，把你本地的tool对象 传进来
     registerTool(tool) {
