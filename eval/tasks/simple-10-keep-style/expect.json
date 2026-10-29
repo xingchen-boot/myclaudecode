@@ -1,0 +1,20 @@
+{
+  "type": "simple",
+  "skill": "dev-simple",
+  "hasDesign": false,
+  "checks": [
+    {
+      "type": "skillLoaded",
+      "skill": "dev-simple"
+    },
+    {
+      "type": "fileContains",
+      "path": "index.html",
+      "text": "确定"
+    },
+    {
+      "type": "fileUnchanged",
+      "path": "style.css"
+    }
+  ]
+}

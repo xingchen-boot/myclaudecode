@@ -1,0 +1,28 @@
+{
+  "type": "complex",
+  "skill": "dev-complex",
+  "hasDesign": true,
+  "checks": [
+    {
+      "type": "skillLoaded",
+      "skill": "dev-complex"
+    },
+    {
+      "type": "fileContains",
+      "path": "index.html",
+      "text": "欢迎"
+    },
+    {
+      "type": "fileNotContains",
+      "path": "index.html",
+      "text": "你好"
+    },
+    {
+      "type": "debuggerClean"
+    },
+    {
+      "type": "toolCalled",
+      "tool": "diff_pic"
+    }
+  ]
+}

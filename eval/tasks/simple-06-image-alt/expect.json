@@ -1,0 +1,16 @@
+{
+  "type": "simple",
+  "skill": "dev-simple",
+  "hasDesign": false,
+  "checks": [
+    {
+      "type": "skillLoaded",
+      "skill": "dev-simple"
+    },
+    {
+      "type": "fileContains",
+      "path": "index.html",
+      "text": "alt=\"头像\""
+    }
+  ]
+}

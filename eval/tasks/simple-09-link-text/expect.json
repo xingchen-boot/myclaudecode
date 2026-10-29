@@ -1,0 +1,26 @@
+{
+  "type": "simple",
+  "skill": "dev-simple",
+  "hasDesign": false,
+  "checks": [
+    {
+      "type": "skillLoaded",
+      "skill": "dev-simple"
+    },
+    {
+      "type": "fileContains",
+      "path": "index.html",
+      "text": "主页"
+    },
+    {
+      "type": "fileContains",
+      "path": "index.html",
+      "text": "href=\"/home\""
+    },
+    {
+      "type": "fileNotContains",
+      "path": "index.html",
+      "text": "首页"
+    }
+  ]
+}

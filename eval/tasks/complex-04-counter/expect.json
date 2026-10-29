@@ -1,0 +1,31 @@
+{
+  "type": "complex",
+  "skill": "dev-complex",
+  "hasDesign": false,
+  "checks": [
+    {
+      "type": "skillLoaded",
+      "skill": "dev-complex"
+    },
+    {
+      "type": "fileContains",
+      "path": "index.html",
+      "text": "id=\"count\""
+    },
+    {
+      "type": "fileContains",
+      "path": "index.html",
+      "text": "次数"
+    },
+    {
+      "type": "fileContains",
+      "path": "main.js",
+      "text": "let count = 0"
+    },
+    {
+      "type": "fileContains",
+      "path": "main.js",
+      "text": "count"
+    }
+  ]
+}

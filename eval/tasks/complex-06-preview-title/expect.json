@@ -1,0 +1,24 @@
+{
+  "type": "complex",
+  "skill": "dev-complex",
+  "hasDesign": false,
+  "checks": [
+    {
+      "type": "skillLoaded",
+      "skill": "dev-complex"
+    },
+    {
+      "type": "fileContains",
+      "path": "index.html",
+      "text": "欢迎"
+    },
+    {
+      "type": "fileNotContains",
+      "path": "index.html",
+      "text": "你好"
+    },
+    {
+      "type": "debuggerClean"
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "type": "complex",
+  "skill": "dev-complex",
+  "hasDesign": false,
+  "checks": [
+    {
+      "type": "skillLoaded",
+      "skill": "dev-complex"
+    },
+    {
+      "type": "fileContains",
+      "path": "index.html",
+      "text": "type=\"email\""
+    },
+    {
+      "type": "fileContains",
+      "path": "index.html",
+      "text": "type=\"password\""
+    },
+    {
+      "type": "fileContains",
+      "path": "index.html",
+      "text": "登录"
+    },
+    {
+      "type": "fileContains",
+      "path": "style.css",
+      "text": "padding: 12px"
+    }
+  ]
+}

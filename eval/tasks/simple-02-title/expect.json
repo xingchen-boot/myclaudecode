@@ -1,0 +1,21 @@
+{
+  "type": "simple",
+  "skill": "dev-simple",
+  "hasDesign": false,
+  "checks": [
+    {
+      "type": "skillLoaded",
+      "skill": "dev-simple"
+    },
+    {
+      "type": "fileContains",
+      "path": "index.html",
+      "text": "会员中心"
+    },
+    {
+      "type": "fileNotContains",
+      "path": "index.html",
+      "text": "旧标题"
+    }
+  ]
+}

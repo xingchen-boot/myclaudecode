@@ -1,0 +1,21 @@
+{
+  "type": "simple",
+  "skill": "dev-simple",
+  "hasDesign": false,
+  "checks": [
+    {
+      "type": "skillLoaded",
+      "skill": "dev-simple"
+    },
+    {
+      "type": "fileContains",
+      "path": "main.js",
+      "text": "欢迎"
+    },
+    {
+      "type": "fileNotContains",
+      "path": "main.js",
+      "text": "你好"
+    }
+  ]
+}

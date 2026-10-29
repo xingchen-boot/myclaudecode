@@ -1,0 +1,26 @@
+{
+  "type": "complex",
+  "skill": "dev-complex",
+  "hasDesign": false,
+  "checks": [
+    {
+      "type": "skillLoaded",
+      "skill": "dev-complex"
+    },
+    {
+      "type": "fileContains",
+      "path": "index.html",
+      "text": "main.js"
+    },
+    {
+      "type": "fileContains",
+      "path": "main.js",
+      "text": "function render"
+    },
+    {
+      "type": "fileContains",
+      "path": "main.js",
+      "text": "列表"
+    }
+  ]
+}

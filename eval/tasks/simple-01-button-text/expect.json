@@ -1,0 +1,21 @@
+{
+  "type": "simple",
+  "skill": "dev-simple",
+  "hasDesign": false,
+  "checks": [
+    {
+      "type": "skillLoaded",
+      "skill": "dev-simple"
+    },
+    {
+      "type": "fileContains",
+      "path": "index.html",
+      "text": "保存"
+    },
+    {
+      "type": "fileNotContains",
+      "path": "index.html",
+      "text": "提交"
+    }
+  ]
+}

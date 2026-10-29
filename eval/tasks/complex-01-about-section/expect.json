@@ -1,0 +1,31 @@
+{
+  "type": "complex",
+  "skill": "dev-complex",
+  "hasDesign": false,
+  "checks": [
+    {
+      "type": "skillLoaded",
+      "skill": "dev-complex"
+    },
+    {
+      "type": "fileContains",
+      "path": "index.html",
+      "text": "id=\"about\""
+    },
+    {
+      "type": "fileContains",
+      "path": "index.html",
+      "text": "关于我们"
+    },
+    {
+      "type": "fileContains",
+      "path": "style.css",
+      "text": "#about"
+    },
+    {
+      "type": "fileContains",
+      "path": "style.css",
+      "text": "16px"
+    }
+  ]
+}

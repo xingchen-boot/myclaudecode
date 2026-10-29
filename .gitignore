@@ -5,3 +5,5 @@ dist/
 .DS_Store
 front/
 .front/
+eval/runs/
+eval/reports/

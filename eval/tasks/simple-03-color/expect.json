@@ -1,0 +1,21 @@
+{
+  "type": "simple",
+  "skill": "dev-simple",
+  "hasDesign": false,
+  "checks": [
+    {
+      "type": "skillLoaded",
+      "skill": "dev-simple"
+    },
+    {
+      "type": "fileContains",
+      "path": "index.html",
+      "text": "green"
+    },
+    {
+      "type": "fileNotContains",
+      "path": "index.html",
+      "text": "red"
+    }
+  ]
+}
