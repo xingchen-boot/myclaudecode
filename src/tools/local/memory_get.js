@@ -1,4 +1,5 @@
-import { getNowMemory } from '../../utils/memoryUtils.js';
+import { getNowMemory, limitMemoryForContext, MAX_MEMORY_LENGTH } from '../../utils/memoryUtils.js';
+import { markUntrustedData } from '../../utils/untrustedText.js';
 
 export default {
     define: {
@@ -12,6 +13,8 @@ export default {
     },
     handle() {
         const { projectMemory, userMemory } = getNowMemory();
-        return `项目级记忆为${projectMemory}，用户级记忆为${userMemory}`;
+        const projectText = limitMemoryForContext(projectMemory);
+        const userText = limitMemoryForContext(userMemory);
+        return markUntrustedData('记忆', `项目级记忆（上限 ${MAX_MEMORY_LENGTH} 字）：\n${projectText}\n\n用户级记忆（上限 ${MAX_MEMORY_LENGTH} 字）：\n${userText}`);
     }
 };

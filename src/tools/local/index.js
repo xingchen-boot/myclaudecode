@@ -5,6 +5,7 @@ import bash from './bash.js';
 import grep from './grep.js';
 import read_file from './read_file.js';
 import write_file from './write_file.js';
+import edit_file from './edit_file.js';
 import glob from './glob.js';
 import confirm from './confirm.js';
 import select from './select.js';
@@ -22,6 +23,7 @@ export default function getLocalTool() {
     localClient.registerTool(grep);
     localClient.registerTool(read_file);
     localClient.registerTool(write_file);
+    localClient.registerTool(edit_file);
     localClient.registerTool(glob);
     localClient.registerTool(confirm);
     localClient.registerTool(select);

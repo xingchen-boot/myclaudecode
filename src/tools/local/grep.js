@@ -1,6 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 import { minimatch } from 'minimatch';
+import { resolveInsideWorkDir } from '../../utils/pathUtils.js';
+import { markUntrustedData } from '../../utils/untrustedText.js';
 
 const MAX_FILE_SIZE = 1024 * 1024; // 1MB
 const MAX_MATCHES = 100;
@@ -53,7 +55,7 @@ function escapeRegExp(string) {
 export default {
     define: {
         name: "grep",
-        description: "在当前项目中全局搜索文件内容，基于 Node.js 实现，跨平台兼容（支持 Windows / macOS / Linux）。支持正则或字符串匹配，可按 glob 过滤文件类型，自动跳过 node_modules、.git、二进制文件等。本工具只用于搜索相关代码，不用其他搜索。如果要进行搜索，一定要使用此工具，不要自行用bash命令解决",
+        description: "在当前项目里搜索文件内容，支持正则和 glob。搜索代码用这个工具，不要用 bash。",
         inputSchema: {
             type: "object",
             properties: {
@@ -79,7 +81,11 @@ export default {
         }
     },
     handle({ pattern, path: searchPath, glob, output_mode = "content" }) {
-        const root = searchPath ? path.resolve(searchPath) : process.cwd();
+        const pathCheck = resolveInsideWorkDir(searchPath || '.');
+        if (!pathCheck.ok) {
+            return pathCheck.message;
+        }
+        const root = pathCheck.resolvedPath;
 
         if (!fs.existsSync(root)) {
             return `搜索路径不存在: ${root}`;
@@ -145,7 +151,7 @@ export default {
         }
 
         if (output_mode === "files_with_matches") {
-            return `找到 ${matches.length} 个匹配文件（已扫描 ${filesScanned} 个文件）：\n${matches.join('\n')}`;
+            return markUntrustedData('搜索到的文件', `找到 ${matches.length} 个匹配文件（已扫描 ${filesScanned} 个文件）：\n${matches.join('\n')}`);
         }
 
         const parts = [];
@@ -157,6 +163,6 @@ export default {
                 parts.push(l.context);
             }
         }
-        return parts.join('\n');
+        return markUntrustedData('搜索到的代码', parts.join('\n'));
     }
 };

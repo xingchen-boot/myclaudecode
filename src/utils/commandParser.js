@@ -4,6 +4,7 @@
 import fs from 'fs'
 import path from 'path'
 import { getCurrentWorkDir } from './pathUtils.js'
+import { markUntrustedData } from './untrustedText.js'
 
 /**
  * 解析用户输入
@@ -162,9 +163,9 @@ export function processFileReferences(input, fileRefs) {
   // 构建上下文
   let context = null
   if (fileContents.length > 0) {
-    context = fileContents.map(file =>
+    context = markUntrustedData('引用的文件', fileContents.map(file =>
       `文件: ${file.path}\n\`\`\`\n${file.content}\n\`\`\``
-    ).join('\n\n')
+    ).join('\n\n'))
   }
 
   // 移除输入中的 @ 引用标记，保留问题部分

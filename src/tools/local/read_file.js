@@ -1,5 +1,6 @@
 import fs from 'fs';
-import path from 'path';
+import { resolveInsideWorkDir } from '../../utils/pathUtils.js';
+import { markUntrustedData } from '../../utils/untrustedText.js';
 
 const MAX_READ_SIZE = 1024 * 1024; // 1MB
 
@@ -27,7 +28,11 @@ export default {
         }
     },
     handle({ file_path, offset = 1, limit }) {
-        const resolvedPath = path.resolve(file_path);
+        const pathCheck = resolveInsideWorkDir(file_path);
+        if (!pathCheck.ok) {
+            return pathCheck.message;
+        }
+        const resolvedPath = pathCheck.resolvedPath;
 
         if (!fs.existsSync(resolvedPath)) {
             return `文件不存在: ${resolvedPath}`;
@@ -60,7 +65,7 @@ export default {
                 resultLines.push(`${startLine + i}: ${selectedLines[i]}`);
             }
 
-            return resultLines.join('\n');
+            return markUntrustedData('读取到的文件', resultLines.join('\n'));
         } catch (err) {
             return `读取文件失败: ${err.message}`;
         }

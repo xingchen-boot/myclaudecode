@@ -22,3 +22,10 @@ export function markCalled(toolName) {
 export function hasCalled(toolName) {
     return calledTools.has(toolName)
 }
+
+/**
+ * 每一轮用户消息开始时清空，避免上一轮写过文件就把调试门禁放开
+ */
+export function resetCalledTools() {
+    calledTools.clear()
+}

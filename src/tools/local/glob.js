@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { minimatch } from 'minimatch';
+import { resolveInsideWorkDir } from '../../utils/pathUtils.js';
 
 const MAX_RESULTS = 1000;
 const IGNORE_DIRS = new Set([
@@ -50,7 +51,11 @@ export default {
         }
     },
     handle({ pattern, search_path }) {
-        const root = search_path ? path.resolve(search_path) : process.cwd();
+        const pathCheck = resolveInsideWorkDir(search_path || '.');
+        if (!pathCheck.ok) {
+            return pathCheck.message;
+        }
+        const root = pathCheck.resolvedPath;
 
         if (!fs.existsSync(root)) {
             return `搜索路径不存在: ${root}`;

@@ -1,11 +1,13 @@
 import fs from 'fs';
 import path from 'path';
 import { markCalled } from './toolState.js';
+import { resolveInsideWorkDir } from '../../utils/pathUtils.js';
+import { hasDangerApproval } from './dangerApproval.js';
 
 export default {
     define: {
         name: "write_file",
-        description: "将内容写入到指定文件，文件不存在则创建，已存在则覆盖。需要修改文件时，先用 read_file 读取原内容，修改后再用此工具写回。不要尝试使用不存在的 edit_file 工具。",
+        description: "新建文件，或必须整文件重写时使用。文件不存在则创建，已存在则覆盖。写入前必须先调用 confirm 并得到 yes。修改已有文件的局部内容时，优先使用 edit_file。",
         inputSchema: {
             type: "object",
             properties: {
@@ -22,7 +24,15 @@ export default {
         }
     },
     handle({ file_path, content }) {
-        const resolvedPath = path.resolve(file_path);
+        if (!hasDangerApproval()) {
+            return `错误：已拦截：写入 ${file_path} 之前需要用户确认。请先调用 confirm 说明要写的文件，得到 yes 后再写入。`;
+        }
+
+        const pathCheck = resolveInsideWorkDir(file_path);
+        if (!pathCheck.ok) {
+            return pathCheck.message;
+        }
+        const resolvedPath = pathCheck.resolvedPath;
 
         try {
             const dir = path.dirname(resolvedPath);

@@ -1,8 +1,10 @@
-import { exec, spawn } from 'child_process';
+import { exec, execFile, spawn } from 'child_process';
 import { promisify } from 'util';
 import os from 'os';
+import { hasDangerApproval, isDangerousCommand } from './dangerApproval.js';
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 const getPlatform = () => {
     return os.platform() === 'win32' ? 'windows' : 'others';
@@ -32,7 +34,7 @@ function isLongRunningCommand(command) {
 export default {
     define: {
         name: "bash",
-        description: "执行系统命令。用于：运行shell命令、查看系统信息（IP地址、环境变量、进程等）、执行脚本、安装依赖、git操作、网络请求（curl）等。Windows下使用PowerShell执行，其他系统直接执行。",
+        description: "执行系统命令。用于：运行shell命令、查看系统信息、执行脚本、安装依赖、git操作、网络请求等。删除、覆盖文件或结束进程的命令必须先调用 confirm 并得到用户 yes，否则会被直接拒绝。Windows下使用PowerShell执行，其他系统直接执行。",
         inputSchema: {
             type: "object",
             properties: {
@@ -46,16 +48,39 @@ export default {
     },
 
     async handle({ command }) {
-        const platform = getPlatform();
-        let finalCommand = command;
-
-        if (platform === 'windows') {
-            finalCommand = `chcp 65001 >nul && powershell -Command "${command}"`;
+        // 危险命令在进程启动前拒绝，不依赖模型自己记得确认
+        if (isDangerousCommand(command) && !hasDangerApproval()) {
+            return `错误：已拦截：命令会删除、覆盖或结束进程，本轮还没有用户确认。请先调用 confirm，向用户说明完整命令「${command}」，得到 yes 后再执行。`;
         }
 
-        // 长时间运行的命令：后台执行，立即返回
+        const platform = getPlatform();
+
+        // Windows 把命令作为 PowerShell 的参数，不再拼进外层引号
+        if (platform === 'windows') {
+            if (isLongRunningCommand(command)) {
+                const child = spawn('powershell.exe', ['-NoProfile', '-Command', command], {
+                    detached: true,
+                    stdio: 'ignore',
+                    windowsHide: true,
+                });
+                child.unref();
+                return `已在后台启动进程 (PID: ${child.pid})，命令: ${command}\n注意：进程在后台运行，不会阻塞后续操作。`;
+            }
+
+            try {
+                const { stdout, stderr } = await execFileAsync(
+                    'powershell.exe',
+                    ['-NoProfile', '-NonInteractive', '-Command', command],
+                    { encoding: 'utf8', timeout: 30000, windowsHide: true }
+                );
+                return `执行成功:\n${stdout}${stderr ? '\n' + stderr : ''}`;
+            } catch (error) {
+                return `执行失败: ${error.message}`;
+            }
+        }
+
         if (isLongRunningCommand(command)) {
-            const child = spawn(finalCommand, [], {
+            const child = spawn(command, [], {
                 shell: true,
                 detached: true,
                 stdio: 'ignore',
@@ -64,9 +89,8 @@ export default {
             return `已在后台启动进程 (PID: ${child.pid})，命令: ${command}\n注意：进程在后台运行，不会阻塞后续操作。`;
         }
 
-        // 普通命令：执行并返回结果，超时 30 秒
         try {
-            const { stdout, stderr } = await execAsync(finalCommand, {
+            const { stdout, stderr } = await execAsync(command, {
                 encoding: 'utf8',
                 timeout: 30000,
             });
