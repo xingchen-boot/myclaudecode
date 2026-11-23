@@ -1,0 +1,3 @@
++ <Wrapper spacing="8">  <!-- margin 迁移到布局层 -->
++ paint: path.addRoundedRect(rect, r, r); painter.fillPath(path)
++ paint: drawShadow(rect, blur, color)

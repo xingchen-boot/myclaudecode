@@ -1,0 +1,98 @@
+{
+  "run_id": "1e993e44",
+  "steps": [
+    {
+      "tool": "read_sfc",
+      "args": {
+        "file": "sample\\LoginCard.vue"
+      },
+      "ok": true,
+      "output": {
+        "lines": 20,
+        "classes": [
+          "card",
+          "desc",
+          "isActive",
+          "isActive && 'card--active'",
+          "title"
+        ]
+      },
+      "error": "",
+      "latency_ms": 0.0,
+      "tokens": 0
+    },
+    {
+      "tool": "query_style_table",
+      "args": {
+        "classes": [
+          "card",
+          "desc",
+          "isActive",
+          "isActive && 'card--active'",
+          "title"
+        ]
+      },
+      "ok": true,
+      "output": {
+        "hit": 3,
+        "miss": [
+          "isActive",
+          "&&",
+          "'card--active'"
+        ]
+      },
+      "error": "",
+      "latency_ms": 0.0,
+      "tokens": 0
+    },
+    {
+      "tool": "gen_patch",
+      "args": {
+        "changes": 3
+      },
+      "ok": true,
+      "output": {
+        "changes": [
+          "margin → 外层 wrapper 承载间距，业务写法不变",
+          "百分比圆角 → QPainter 路径绘制（QPainterPath::addRoundedRect）",
+          "box-shadow → QPainter 阴影绘制（离屏模糊 + 合成）"
+        ]
+      },
+      "error": "",
+      "latency_ms": 0.0,
+      "tokens": 0
+    },
+    {
+      "tool": "build_check",
+      "args": {
+        "rules": 5
+      },
+      "ok": true,
+      "output": {
+        "residual": []
+      },
+      "error": "",
+      "latency_ms": 0.0,
+      "tokens": 0
+    },
+    {
+      "tool": "node_tree_diff",
+      "args": {
+        "before": "before_tree.json",
+        "after": "after_tree.json"
+      },
+      "ok": true,
+      "output": {
+        "diff_count": 2,
+        "risky": 0
+      },
+      "error": "",
+      "latency_ms": 0.0,
+      "tokens": 0
+    }
+  ],
+  "patch": "+ <Wrapper spacing=\"8\">  <!-- margin 迁移到布局层 -->\n+ paint: path.addRoundedRect(rect, r, r); painter.fillPath(path)\n+ paint: drawShadow(rect, blur, color)",
+  "final": "迁移闭环完成：改写 3 处（margin → 外层 wrapper 承载间距，业务写法不变; 百分比圆角 → QPainter 路径绘制（QPainterPath::addRoundedRect）; box-shadow → QPainter 阴影绘制（离屏模糊 + 合成））；编译前置检查 通过；节点树差异 2 处，回归风险 0 处；工具成功率 5/5。",
+  "tool_success_rate": 1.0,
+  "total_latency_ms": 0.0
+}

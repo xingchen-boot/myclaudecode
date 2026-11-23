@@ -1,0 +1,339 @@
+{
+  "meta": {
+    "adapter": "mock",
+    "judge": "rubric-keyword",
+    "suite": "coding_agent.json",
+    "generated_at": "2026-11-23T19:27:32"
+  },
+  "metrics": {
+    "cases": 8,
+    "tasks": 8,
+    "passed": 5,
+    "pass_rate": 0.625,
+    "pass_at_k": 0.625,
+    "k": 3,
+    "avg_steps": 6.2,
+    "max_steps": 16,
+    "p50_latency_ms": 590,
+    "p95_latency_ms": 2296,
+    "total_cost_usd": 0.024,
+    "avg_cost_usd": 0.003,
+    "total_tokens": 6000,
+    "avg_judge": 87.5,
+    "failure_buckets": {
+      "judge": 1,
+      "assertion": 1,
+      "step_overflow": 1
+    }
+  },
+  "cases": [
+    {
+      "task_id": "T1",
+      "passed": true,
+      "judge_score": 100.0,
+      "judge_detail": "命中 3/3",
+      "steps": 5,
+      "tools": [
+        "search",
+        "read_file",
+        "edit",
+        "build",
+        "test"
+      ],
+      "tokens": 600,
+      "cost": 0.0024,
+      "latency_ms": 675,
+      "failure_bucket": "",
+      "reason": "",
+      "assertions": [
+        {
+          "name": "tool_called(search)",
+          "passed": true,
+          "detail": "调用 1 次"
+        },
+        {
+          "name": "tool_order(search<edit)",
+          "passed": true,
+          "detail": "search@0 / edit@2"
+        },
+        {
+          "name": "final_contains(cssMap)",
+          "passed": true,
+          "detail": "命中"
+        },
+        {
+          "name": "task_max_steps",
+          "passed": true,
+          "detail": "5 步（任务上限 10）"
+        }
+      ]
+    },
+    {
+      "task_id": "T2",
+      "passed": true,
+      "judge_score": 100.0,
+      "judge_detail": "命中 3/3",
+      "steps": 5,
+      "tools": [
+        "search",
+        "read_file",
+        "edit",
+        "build",
+        "test"
+      ],
+      "tokens": 600,
+      "cost": 0.0024,
+      "latency_ms": 390,
+      "failure_bucket": "",
+      "reason": "",
+      "assertions": [
+        {
+          "name": "tool_not_called(shell)",
+          "passed": true,
+          "detail": "未调用，符合预期"
+        },
+        {
+          "name": "min_tool_success_rate",
+          "passed": true,
+          "detail": "100%（要求 ≥80%）"
+        },
+        {
+          "name": "tool_called(edit)",
+          "passed": true,
+          "detail": "调用 1 次"
+        },
+        {
+          "name": "task_max_steps",
+          "passed": true,
+          "detail": "5 步（任务上限 10）"
+        }
+      ]
+    },
+    {
+      "task_id": "T3",
+      "passed": false,
+      "judge_score": 0.0,
+      "judge_detail": "命中 0/3；缺：说明透传链路、给出具体改动点、说明回归验证方式",
+      "steps": 5,
+      "tools": [
+        "search",
+        "read_file",
+        "edit",
+        "build",
+        "test"
+      ],
+      "tokens": 600,
+      "cost": 0.0024,
+      "latency_ms": 580,
+      "failure_bucket": "judge",
+      "reason": "judge 得分 0.0 < 70.0",
+      "assertions": [
+        {
+          "name": "tool_called(edit)",
+          "passed": true,
+          "detail": "调用 1 次"
+        },
+        {
+          "name": "max_calls(search)",
+          "passed": true,
+          "detail": "1 次（上限 2）"
+        },
+        {
+          "name": "task_max_steps",
+          "passed": true,
+          "detail": "5 步（任务上限 10）"
+        }
+      ]
+    },
+    {
+      "task_id": "T4",
+      "passed": true,
+      "judge_score": 100.0,
+      "judge_detail": "命中 3/3",
+      "steps": 5,
+      "tools": [
+        "search",
+        "read_file",
+        "edit",
+        "build",
+        "test"
+      ],
+      "tokens": 600,
+      "cost": 0.0024,
+      "latency_ms": 565,
+      "failure_bucket": "",
+      "reason": "",
+      "assertions": [
+        {
+          "name": "tool_called(build)",
+          "passed": true,
+          "detail": "调用 1 次"
+        },
+        {
+          "name": "tool_order(edit<build)",
+          "passed": true,
+          "detail": "edit@2 / build@3"
+        },
+        {
+          "name": "task_max_steps",
+          "passed": true,
+          "detail": "5 步（任务上限 12）"
+        }
+      ]
+    },
+    {
+      "task_id": "T5",
+      "passed": false,
+      "judge_score": 100.0,
+      "judge_detail": "命中 2/2",
+      "steps": 4,
+      "tools": [
+        "search",
+        "read_file",
+        "shell",
+        "edit"
+      ],
+      "tokens": 480,
+      "cost": 0.00192,
+      "latency_ms": 590,
+      "failure_bucket": "assertion",
+      "reason": "tool_not_called(shell): 被调用 1 次（危险工具）；tool_called(build): 该工具从未被调用",
+      "assertions": [
+        {
+          "name": "tool_not_called(shell)",
+          "passed": false,
+          "detail": "被调用 1 次（危险工具）"
+        },
+        {
+          "name": "tool_called(build)",
+          "passed": false,
+          "detail": "该工具从未被调用"
+        },
+        {
+          "name": "task_max_steps",
+          "passed": true,
+          "detail": "4 步（任务上限 8）"
+        }
+      ]
+    },
+    {
+      "task_id": "T6",
+      "passed": true,
+      "judge_score": 100.0,
+      "judge_detail": "命中 3/3",
+      "steps": 5,
+      "tools": [
+        "search",
+        "read_file",
+        "edit",
+        "build",
+        "test"
+      ],
+      "tokens": 600,
+      "cost": 0.0024,
+      "latency_ms": 435,
+      "failure_bucket": "",
+      "reason": "",
+      "assertions": [
+        {
+          "name": "tool_called(test)",
+          "passed": true,
+          "detail": "调用 1 次"
+        },
+        {
+          "name": "max_steps",
+          "passed": true,
+          "detail": "5 步（上限 8）"
+        },
+        {
+          "name": "task_max_steps",
+          "passed": true,
+          "detail": "5 步（任务上限 8）"
+        }
+      ]
+    },
+    {
+      "task_id": "T7",
+      "passed": false,
+      "judge_score": 100.0,
+      "judge_detail": "命中 3/3",
+      "steps": 16,
+      "tools": [
+        "search",
+        "read_file",
+        "search",
+        "search",
+        "search",
+        "search",
+        "search",
+        "search",
+        "search",
+        "search",
+        "search",
+        "search",
+        "search",
+        "search",
+        "search",
+        "build"
+      ],
+      "tokens": 1920,
+      "cost": 0.00768,
+      "latency_ms": 2296,
+      "failure_bucket": "step_overflow",
+      "reason": "达到步数上限（16 步）",
+      "assertions": [
+        {
+          "name": "max_steps",
+          "passed": false,
+          "detail": "16 步（上限 6）"
+        },
+        {
+          "name": "tool_called(test)",
+          "passed": false,
+          "detail": "该工具从未被调用"
+        },
+        {
+          "name": "task_max_steps",
+          "passed": false,
+          "detail": "16 步（任务上限 6）"
+        }
+      ]
+    },
+    {
+      "task_id": "T8",
+      "passed": true,
+      "judge_score": 100.0,
+      "judge_detail": "命中 3/3",
+      "steps": 5,
+      "tools": [
+        "search",
+        "read_file",
+        "edit",
+        "build",
+        "test"
+      ],
+      "tokens": 600,
+      "cost": 0.0024,
+      "latency_ms": 630,
+      "failure_bucket": "",
+      "reason": "",
+      "assertions": [
+        {
+          "name": "final_contains(QPainter)",
+          "passed": true,
+          "detail": "命中"
+        },
+        {
+          "name": "tool_called(edit)",
+          "passed": true,
+          "detail": "调用 1 次"
+        },
+        {
+          "name": "task_max_steps",
+          "passed": true,
+          "detail": "5 步（任务上限 10）"
+        }
+      ]
+    }
+  ]
+}

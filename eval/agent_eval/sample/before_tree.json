@@ -1,0 +1,8 @@
+{
+  "type": "div",
+  "props": { "class": "card" },
+  "children": [
+    { "type": "text", "props": { "class": "title", "margin": "0 0 8px 0", "font-size": "16px" }, "children": [ { "type": "raw", "text": "登录" } ] },
+    { "type": "text", "props": { "class": "desc", "font-size": "12px" }, "children": [ { "type": "raw", "text": "请使用 QQ 账号登录" } ] }
+  ]
+}

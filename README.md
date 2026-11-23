@@ -56,7 +56,11 @@
 
 ## 评测
 
-项目自带一套端到端评测：每个任务在独立 workspace 里跑完整 Agent 流程，再用 `expect.json` 对**产物文件**做断言，而不是让模型自己说做完了。
+评测分成两层，一层管「这个 Agent 跑得好不好」，一层管「这类 Agent 到底算不算成功」。
+
+### 1. 端到端题库评测（JS，跑在本项目上）
+
+每个任务在独立 workspace 里跑完整 Agent 流程，再用 `expect.json` 对**产物文件**做断言，而不是让模型自己说做完了。
 
 - 题库 17 题：10 个简单改写 + 7 个复杂任务（其中 2 个是「给一张设计图，还原页面」）
 - 断言 6 类：`skillLoaded` / `fileContains` / `fileNotContains` / `fileUnchanged` / `toolCalled` / `debuggerClean`
@@ -75,6 +79,21 @@
 唯一失败例是 `simple-06-image-alt`：要求给图片补 `alt="头像"`，Agent 改了别的地方、调了 13 次工具，就是没写这个属性。这条失败例故意留着 —— 报告不是 100% 通过才可信，断言能抓住真实失败才可信。
 
 完整明细、断言口径、复跑方式见 [`eval/RESULTS.md`](eval/RESULTS.md)。
+
+### 2. 框架级评测（Python，零依赖，可接 CI 门禁）
+
+[`eval/agent_eval/`](eval/agent_eval/) 是另一套独立框架，用来判「一次 Agent 运行算不算成功」，可以套在任意 Agent 上：
+
+- **两层判定**：硬断言（工具是否被调用 / 调用顺序 / 危险工具 / 步数上限 / 产物关键词）+ Rubric 与 LLM-as-judge 语义打分，任一层不过即失败；两层结论冲突时标 `[冲突待人工复核]`，不直接放行。
+- **指标**：pass@k 组合数无偏估计、P95 延迟、token 成本，可直接当 CI 阈值门禁。
+- **失败四桶归因**：`assertion` / `judge` / `step_overflow` / `runtime`，让失败落到根因而不是一句「跑挂了」。
+- **自反测**：内置 3 类可控负例，反向验证框架自己能抓到错，避免「全过但框架失效」。
+
+```bash
+cd eval/agent_eval
+python cli.py run --suite suites/coding_agent.json --agent mock
+# cases=8 pass_rate=62.5% pass@3=62.5% avg_steps=6.2 p95=2296ms cost=$0.0240
+```
 
 
 
